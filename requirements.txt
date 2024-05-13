@@ -1,0 +1,8 @@
+pandas==1.5.2
+setuptools==65.5.1
+numpy==1.26
+tqdm==4.64.1
+biopython==1.83
+lxml==5.2.0
+requests==2.31.0
+PyMuPDF==1.24.1
