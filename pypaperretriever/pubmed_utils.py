@@ -10,8 +10,6 @@ from itertools import chain
 from lxml import etree
 from tqdm import tqdm
 
-import fitz  # PyMuPDF
-# from calvin_utils.gpt_sys_review.image_utils import ImageExtractor
 from pypaperretriever import PaperRetriever
 
 tqdm.pandas()
@@ -255,27 +253,6 @@ class PubMedSearcher:
         handle.close()
         abstract = article_details['PubmedArticle'][0]['MedlineCitation']['Article'].get('Abstract', {}).get('AbstractText', '')
         return " ".join(abstract)
-
-    # def extract_images(self):
-    #     """
-    #     Extracts images from PDFs for each article in the DataFrame and saves the image paths in a new column 'img_paths'.
-    #     Able to handle both native and image-based PDFs.
-    #     """
-    #     if 'pdf_filepath' not in self.df.columns:
-    #         print("PDF file paths column not found in DataFrame.")
-    #         return
-    #     self.df["img_paths"] = [[] for _ in range(len(self.df))]
-    #     for idx, row in tqdm(self.df.iterrows(), total=len(self.df), desc="Extracting images"):
-    #         # Check if img_paths already exists, or is None, and skip if so
-    #         if pd.notna(row["img_paths"]) and len(row["img_paths"]) > 0:
-    #             continue
-    #         pdf_path = row["pdf_filepath"]
-    #         if pd.isna(pdf_path) or pdf_path in [0, "0", None, "", "<NA>"]:
-    #             continue
-    #         img_extractor = ImageExtractor(pdf_path)
-    #         img_extractor.extract_images()
-    #         self.df.at[idx, "img_paths"] = img_extractor.img_paths if len(img_extractor.img_paths) > 0 else ["Unavailable"]
-    #     return self
 
     def download_xml_fulltext(self, download_directory="downloads"):
         """

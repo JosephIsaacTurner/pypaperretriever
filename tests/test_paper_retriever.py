@@ -1,5 +1,6 @@
 from unittest.mock import patch, Mock
-from pypaperretriever.paper_retriever import PaperRetriever, encode_doi
+from pypaperretriever import PaperRetriever
+from pypaperretriever.paper_retriever import encode_doi
 import json
 from pathlib import Path
 from io import BytesIO
@@ -7,7 +8,7 @@ from Bio import Entrez
 
 # Sample DOI and PMID for testing
 TEST_DOI = "10.7759/cureus.76081"
-TEST_PMID = "12345678"
+TEST_PMID = "39835015"
 TEST_EMAIL = "bob_tester@testemail.com"
 
 # For referencing your actual PDF from tests/data/
