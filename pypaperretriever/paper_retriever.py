@@ -8,6 +8,8 @@ import json
 from glob import glob
 import fitz
 import argparse
+import re
+from urllib.parse import urljoin, urlparse
 
 class PaperRetriever:
     """
@@ -73,9 +75,6 @@ class PaperRetriever:
         
         if response.status_code == 200:
             data = response.json()
-            oa_status = data.get("oa_status", "unknown") # Not used in current implementation
-            is_oa = data.get("is_oa", False) # This is not always accurate (may say OA when no PDF link)
-            best_oa_location_url = data.get("best_oa_location", {}).get("url", None) if data.get("best_oa_location") else None # Not used in current implementation
             pdf_urls = [None, None, None, None]
             pdf_locations = [loc.get("url_for_pdf") for loc in data.get("oa_locations", []) if loc.get("url_for_pdf")]
             pdf_urls[:len(pdf_locations)] = pdf_locations[:4]
@@ -123,12 +122,98 @@ class PaperRetriever:
                 soup = BeautifulSoup(response.content, 'html.parser')
                 # Find PDF links
                 pdf_links = [a['href'] for a in soup.find_all('a', href=True) if a['href'].endswith('.pdf')]
-                pdf_links = [f"{article_link}{pdf_link}" for pdf_link in pdf_links]
+                pdf_links = [f"{article_link}{pdf_link}" if pdf_link.startswith('/') else pdf_link for pdf_link in pdf_links]
                 pdf_links = list(set(pdf_links))
                 for link in pdf_links:
                     self.pdf_urls.append(link)
             else:
                 print(f"Failed to fetch the PubMed Central link. Status code: {response.status_code}")
+
+    
+    def check_crossref_access(self, doi):
+        base_url = "https://api.crossref.org/works/"
+        full_url = f"{base_url}{doi}"
+        urls = []
+        pdf_urls = []
+        
+        try:
+            response = requests.get(full_url)
+            if response.status_code == 200:
+                data = response.json()
+                primary_url = data.get('message', {}).get('URL', None)
+                if primary_url:
+                    urls.append(primary_url)
+                doi_link = f"https://doi.org/{doi}"
+                urls.append(doi_link)
+            
+            for url in urls:
+                try:
+                    response = requests.get(url, headers={
+                        "User-Agent":  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
+                                    "AppleWebKit/537.36 (KHTML, like Gecko) " +
+                                    "Chrome/58.0.3029.110 Safari/537.3"
+                    }, timeout=10)  # Added timeout for better error handling
+                    
+                    if response.status_code == 200:
+                        final_url = response.url  # The final resolved URL after redirects
+                        soup = BeautifulSoup(response.content, 'html.parser')
+                        
+                        pdf_links = set()
+
+                        # 1. Extract PDF links from <a> tags
+                        for a in soup.find_all('a', href=True):
+                            href = a['href']
+                            if href.lower().endswith('.pdf'):
+                                absolute_url = urljoin(final_url, href)
+                                pdf_links.add(absolute_url)
+                        
+                        # 2. Extract PDF links from JavaScript
+                        for script in soup.find_all('script'):
+                            if script.string:
+                                # Regex to find patterns like window.open('/path/to/file.pdf') or href = "/path/to/file.pdf"
+                                matches = re.findall(r'''(?:window\.open|href\s*=\s*)\(['"]([^'"]+\.pdf)['"]\)''', script.string, re.IGNORECASE)
+                                for match in matches:
+                                    absolute_url = urljoin(final_url, match)
+                                    pdf_links.add(absolute_url)
+                                
+                                # Another regex pattern based on the example provided
+                                matches = re.findall(r'''location\s*=\s*['"]([^'"]+\.pdf)['"]''', script.string, re.IGNORECASE)
+                                for match in matches:
+                                    absolute_url = urljoin(final_url, match)
+                                    pdf_links.add(absolute_url)
+
+                        # 3. Optionally, search for direct links in data attributes or other patterns
+                        # Example: data-pdf-url="/path/to/file.pdf"
+                        data_pdf_urls = re.findall(r'data-pdf-url=["\']([^"\']+\.pdf)["\']', response.text, re.IGNORECASE)
+                        for match in data_pdf_urls:
+                            absolute_url = urljoin(final_url, match)
+                            pdf_links.add(absolute_url)
+
+                        # Remove any invalid URLs (optional)
+                        valid_pdf_links = set()
+                        for link in pdf_links:
+                            parsed = urlparse(link)
+                            if parsed.scheme in ['http', 'https']:
+                                valid_pdf_links.add(link)
+
+                        if valid_pdf_links:
+                            for link in valid_pdf_links:
+                                pdf_urls.append(link)
+
+                    else:
+                        print(f"Failed to access URL: {url} with status code {response.status_code}")
+                
+                except requests.exceptions.RequestException as e:
+                    print(f"Error accessing URL: {url}")
+                    print(e)
+
+            final_pdf_urls = list(set(pdf_urls))
+            for link in final_pdf_urls:
+                self.pdf_urls.append(link)
+        
+        except requests.exceptions.RequestException as e:
+            print("Something went wrong while trying to access Crossref API")
+            print(e)
 
     def check_scihub_access(self):
         """
@@ -233,6 +318,7 @@ class PaperRetriever:
         
         self.check_open_access()
         self.check_pubmed_central_access()
+        self.check_crossref_access(decode_doi(self.doi))
         if self.pdf_urls:
             if self.download_pdf():
                 return self
