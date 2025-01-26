@@ -30,7 +30,6 @@ class PaperRetriever:
         check_scihub_access(): Checks if the paper is available on Sci-Hub.
         download_pdf(): Downloads the PDF from the first available URL.
         pmid_to_doi(pmid): Converts a PMID to a DOI using the Entrez API.
-        doi_to_pmid(): Converts a DOI to a PMID using the Entrez API.
         find_and_download(override_previous_attempt=False): Finds and downloads the paper.
         download_from_list(url_list): Downloads PDFs from a list of URLs.
         create_json_sidecar(download_success, pdf_filepath, json_filepath, url=None): Creates a JSON sidecar file with download information.
@@ -69,7 +68,7 @@ class PaperRetriever:
         Checks if an article is open access using Unpaywall and updates the instance with access information.
         """
 
-        url = f"https://api.unpaywall.org/v2/{self.doi}?email={self.email}"
+        url = f"https://api.unpaywall.org/v2/{decode_doi(self.doi)}?email={self.email}"
         response = requests.get(url)
         
         if response.status_code == 200:
@@ -97,6 +96,39 @@ class PaperRetriever:
         else:
             print("error", f"Unpaywall API request failed with status code {response.status_code}")
             return self
+        
+    def check_pubmed_central_access(self):
+        """
+        Checks if an article is available in PubMed Central, and finds associated PDF links.
+        """
+        pmc_id = None
+        id = self.pmid if self.pmid else doi_to_pmid(decode_doi(self.doi), self.email)
+        records = entrez_efetch(self.email, id)
+        try:
+            id_list = records['PubmedArticle'][0]['PubmedData']['ArticleIdList']
+            for element in id_list:
+                if element.attributes.get('IdType') == 'pmc':
+                    pmc_id = str(element)
+
+        except Exception as e:
+            print(f"Error processing while checking PMC access for id {id}: {e}")
+
+        if pmc_id is not None:
+
+            article_link = f'https://pmc.ncbi.nlm.nih.gov/articles/{pmc_id}/'
+
+            response = requests.get(article_link, headers={"User-Agent": random.choice(self.user_agents)})
+
+            if response.status_code == 200:
+                soup = BeautifulSoup(response.content, 'html.parser')
+                # Find PDF links
+                pdf_links = [a['href'] for a in soup.find_all('a', href=True) if a['href'].endswith('.pdf')]
+                pdf_links = [f"{article_link}{pdf_link}" for pdf_link in pdf_links]
+                pdf_links = list(set(pdf_links))
+                for link in pdf_links:
+                    self.pdf_urls.append(link)
+            else:
+                print(f"Failed to fetch the PubMed Central link. Status code: {response.status_code}")
 
     def check_scihub_access(self):
         """
@@ -107,7 +139,7 @@ class PaperRetriever:
         If a PDF is found, it updates the instance attributes `on_scihub` and `pdf_urls`.
         """
         mirror_list = ["https://sci-hub.st", "https://sci-hub.ru", "https://sci-hub.se"]
-        urls = [f"{mirror}/{self.doi}" for mirror in mirror_list]
+        urls = [f"{mirror}/{decode_doi(self.doi)}" for mirror in mirror_list]
 
         for i, url in enumerate(urls):
             time.sleep(random.randint(1, 3)) # Delay between requests, avoids being blocked
@@ -191,32 +223,6 @@ class PaperRetriever:
         except Exception as e:
             print(f"Error processing PMID {pmid}: {e}")
         return None
-
-    def doi_to_pmid(self):
-        """
-        Converts a DOI to a PMID using the Entrez API, and if that fails, uses the PMC API.
-        """
-        records = entrez_efetch(self.email, self.doi)
-        try:
-            id_list = records['PubmedArticle'][0]['PubmedData']['ArticleIdList']
-            for element in id_list:
-                if element.attributes.get('IdType') == 'pubmed':
-                    if len(str(element)) > 3:
-                        self.pmid = str(element)
-                        return self            
-        except Exception as e:
-            print(f"Error converting doi {self.doi} to pmid: {e}")
-        try:
-            url_base = "https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/v1.0/?"
-            url = f"{url_base}ids={self.doi}&format=json"
-            response = requests.get(url)
-            if response.status_code == 200:
-                data = response.json()
-                self.pmid = data.get("records", [{}])[0].get("pmid", None)
-                return self
-        except Exception as e:
-            print(f"Error converting doi {self.doi} to pmid: {e}")
-        return self
     
     def find_and_download(self, override_previous_attempt=False):
         """
@@ -226,6 +232,7 @@ class PaperRetriever:
             return self
         
         self.check_open_access()
+        self.check_pubmed_central_access()
         if self.pdf_urls:
             if self.download_pdf():
                 return self
@@ -374,6 +381,45 @@ def entrez_efetch(email, id):
     records = Entrez.read(handle)
     handle.close()
     return records
+
+def doi_to_pmid(doi, email):
+    """
+    Converts a DOI to a PMID using the Entrez API, and if that fails, uses the PMC API.
+    """
+    print(f"[ReferenceRetriever] Converting DOI {doi} to PMID.")
+    Entrez.email = email
+    try:
+        search_handle = Entrez.esearch(db="pubmed", term=doi)
+        search_results = Entrez.read(search_handle)
+        search_handle.close()
+        if search_results['IdList']:
+            pmid = search_results['IdList'][0]
+            print(f"[ReferenceRetriever] Converted DOI {doi} to PMID: {pmid}")
+            return pmid
+        else:
+            print(f"[ReferenceRetriever] No PMID found for DOI {doi} in Entrez PubMed.")
+    except Exception as e:
+        print(f"[ReferenceRetriever] Error converting DOI {doi} to PMID via Entrez: {e}")
+
+    try:
+        url_base = "https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/v1.0/?"
+        url = f"{url_base}ids={doi}&format=json"
+        print(f"[ReferenceRetriever] Requesting PMID via PMC ID Converter from URL: {url}")
+        response = requests.get(url)
+        if response.status_code == 200:
+            data = response.json()
+            pmid = data.get("records", [{}])[0].get("pmid", None)
+            if pmid:
+                print(f"[ReferenceRetriever] Converted DOI {doi} to PMID via PMC: {pmid}")
+                return pmid
+            else:
+                print(f"[ReferenceRetriever] PMC ID Converter did not return a PMID for DOI {doi}.")
+        else:
+            print(f"[ReferenceRetriever] PMC ID Converter request failed with status code: {response.status_code}")
+    except Exception as e:
+        print(f"[ReferenceRetriever] Error converting DOI {doi} to PMID via PMC ID Converter: {e}")
+    return None
+
 
 def main():
     """
