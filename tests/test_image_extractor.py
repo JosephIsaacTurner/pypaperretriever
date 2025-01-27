@@ -3,7 +3,7 @@ import shutil
 import json
 import pytest
 from pathlib import Path
-from pypaperretriever.paper_retriever import encode_doi
+from pypaperretriever import encode_doi
 from pypaperretriever import ImageExtractor  
 
 TEST_DOI = "10.7759/cureus.76081"

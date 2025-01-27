@@ -1,5 +1,5 @@
 import pandas as pd
-from pypaperretriever import ReferenceRetriever
+from .reference_retriever import ReferenceRetriever
 
 class PaperTracker:
     def __init__(self, email, max_upstream_generations=1, max_downstream_generations=1, doi=None, pmid=None):

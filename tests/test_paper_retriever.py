@@ -1,6 +1,6 @@
 from unittest.mock import patch, Mock
 from pypaperretriever import PaperRetriever
-from pypaperretriever.paper_retriever import encode_doi
+from pypaperretriever import encode_doi
 import json
 from pathlib import Path
 from io import BytesIO
@@ -70,7 +70,7 @@ def mock_entrez_efetch_pmid(*args, **kwargs):
     return Entrez.read(data)
 
 @patch('pypaperretriever.paper_retriever.requests.get', side_effect=mock_requests_get)
-@patch('pypaperretriever.paper_retriever.entrez_efetch', side_effect=mock_entrez_efetch_doi)
+@patch('pypaperretriever.utils.entrez_efetch', side_effect=mock_entrez_efetch_doi)
 def test_fetch_paper_with_doi(mock_efetch, mock_get, tmp_path):
     """
     Test PaperRetriever's ability to fetch and download a paper using a DOI.
@@ -80,7 +80,7 @@ def test_fetch_paper_with_doi(mock_efetch, mock_get, tmp_path):
     retriever = PaperRetriever(email=TEST_EMAIL, doi=TEST_DOI, download_directory=str(tmp_path))
 
     # Invoke the method to find and download the paper
-    retriever.find_and_download()
+    retriever.download()
 
     # Assertions to ensure Entrez.efetch was NOT called
     mock_efetch.assert_not_called()
@@ -113,7 +113,7 @@ def test_fetch_paper_with_doi(mock_efetch, mock_get, tmp_path):
         assert json_data['open_access'] is True
 
 @patch('pypaperretriever.paper_retriever.requests.get', side_effect=mock_requests_get)
-@patch('pypaperretriever.paper_retriever.entrez_efetch', side_effect=mock_entrez_efetch_pmid)
+@patch('pypaperretriever.utils.entrez_efetch', side_effect=mock_entrez_efetch_pmid)
 def test_fetch_paper_with_pmid(mock_efetch, mock_get, tmp_path):
     """
     Test PaperRetriever's ability to fetch and download a paper using a PMID.
@@ -123,7 +123,7 @@ def test_fetch_paper_with_pmid(mock_efetch, mock_get, tmp_path):
     retriever = PaperRetriever(email=TEST_EMAIL, pmid=TEST_PMID, download_directory=str(tmp_path))
 
     # Invoke the method to find and download the paper
-    retriever.find_and_download()
+    retriever.download()
 
     # Assertions to ensure Entrez.efetch was called
     mock_efetch.assert_called()

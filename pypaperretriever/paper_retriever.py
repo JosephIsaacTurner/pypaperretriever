@@ -11,7 +11,7 @@ import argparse
 import re
 from urllib.parse import urljoin, urlparse
 
-from .pubmed_utils import entrez_efetch, pmid_to_doi, doi_to_pmid
+from .utils import entrez_efetch, pmid_to_doi, doi_to_pmid, encode_doi, decode_doi
 
 class PaperRetriever:
     """
@@ -78,14 +78,18 @@ class PaperRetriever:
         self.check_open_access()
         self.check_pubmed_central_access()
         self.check_crossref_access(decode_doi(self.doi))
-        if self.pdf_urls:
+        if len(self.pdf_urls) > 0:
+            print("[PyPaperRetriever] Found Open-Access PDF link(s). Attempting download...")
             if self._download_pdf():
                 return self
         if self.allow_scihub:
             self.pdf_urls = []
-            self.check_scihub_access().download_pdf()
+            self.check_scihub_access()
+            if self.on_scihub:
+                print("[PyPaperRetriever] Found PDF on Sci-Hub. Attempting download...")
+                self._download_pdf()
         else:
-            self._download_pdf()
+            print(f"[PyPaperRetriever] No Open-Access PDF found for {decode_doi(self.doi)}. Sci-Hub access is disabled.")
         return self
     
     def check_open_access(self):
@@ -153,6 +157,9 @@ class PaperRetriever:
                 print(f"Failed to fetch the PubMed Central link. Status code: {response.status_code}")
 
     def check_crossref_access(self, doi):
+        """
+        Checks if an article is available on Crossref, and finds associated PDF links.
+        """
         base_url = "https://api.crossref.org/works/"
         full_url = f"{base_url}{doi}"
         urls = []
@@ -307,6 +314,7 @@ class PaperRetriever:
                     # Check if the file is downloaded and not corrupted
                     if self._check_if_downloaded(file_directory, '.pdf'):
                         self._create_json_sidecar(download_success=True, pdf_filepath=pdf_path, json_filepath=json_path, url=pdf_url)
+                        print(f"[PyPaperRetriever] PDF downloaded successfully to {pdf_path} for {decode_doi(self.doi)}")
                         return True
             except requests.RequestException as e:
                 print(f"Failed to download from {pdf_url} due to: {e}")
@@ -314,6 +322,7 @@ class PaperRetriever:
         # If no URLs resulted in a successful download
         self.filepath = "unavailable"
         self._create_json_sidecar(download_success=False, pdf_filepath=pdf_path, json_filepath=json_path)
+        print(f"[PyPaperRetriever] Failed to download PDF for {decode_doi(self.doi)}")
         return False
 
     def _create_json_sidecar(self, download_success, pdf_filepath, json_filepath, url=None):
@@ -327,6 +336,7 @@ class PaperRetriever:
         The JSON sidecar file contains the following fields:
             - doi (str): The DOI of the paper.
             - pmid (str): The PubMed ID of the paper.
+            - id (str): The ID of the paper (either the DOI or the PMID).
             - source_url (str): The URL from which the PDF was downloaded.
             - all_urls (list): A list of all URLs attempted for downloading the PDF.
             - download_success (bool): Indicates whether the PDF was successfully downloaded.
@@ -418,17 +428,6 @@ class PaperRetriever:
             else:
                 pdf_link = pdf_link_raw
         return pdf_link
-
-def encode_doi(doi):
-    """Encodes a DOI for safe inclusion in a filename using URL encoding."""
-    doi = doi.split("doi.org/")[-1].split("?")[0]
-    encoded_doi = doi.replace('/', '%2F').replace('-', '%2D').replace('.', '%2E')
-    return encoded_doi.strip("'\"")
-
-def decode_doi(encoded_doi):
-    """Decodes a previously URL-encoded DOI."""
-    decoded_doi = encoded_doi.replace('%2F', '/').replace('%2D', '-').replace('%2E', '.')
-    return decoded_doi
 
 def main():
     """
