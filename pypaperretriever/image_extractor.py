@@ -1,5 +1,5 @@
 import os
-import fitz 
+import pymupdf
 import numpy as np
 import cv2
 from pdf2image import convert_from_path
@@ -52,7 +52,7 @@ class ImageExtractor:
     def extract_from_native_pdf(self):
         """Extract figures from a native PDF using PyMuPDF."""
         try:
-            with fitz.open(self.filepath) as doc:
+            with pymupdf.open(self.filepath) as doc:
                 for page_num in range(len(doc)):
                     page = doc.load_page(page_num)
                     for img in page.get_images(full=True):
@@ -164,7 +164,7 @@ class ImageExtractor:
     def _check_pdf_type(self):
         """Determine if the PDF is native or image-based by checking for substantial text."""
         try:
-            with fitz.open(self.filepath) as doc:
+            with pymupdf.open(self.filepath) as doc:
                 for page_num in range(min(5, len(doc))):  # Check the first 5 pages
                     page = doc.load_page(page_num)
                     text = page.get_text()
@@ -231,7 +231,7 @@ class ImageExtractor:
     def _determine_if_valid_pdf(self):
         """Check if the PDF is a valid file."""
         try:
-            with fitz.open(self.filepath) as doc:
+            with pymupdf.open(self.filepath) as doc:
                 self.is_valid_pdf = True
         except Exception as e:
             print(f"Error opening PDF: {e}")
