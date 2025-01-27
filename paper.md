@@ -74,12 +74,6 @@ All code and documentation for PyPaperRetriever are available on [GitHub](https:
 ## Author Contributions
 JIT conceived the idea for PyPaperRetriever, developed the codebase, and wrote the documentation. JIT has used PyPaperRetriever in several research projects and has received positive feedback from collaborators. JIT is the primary author of this paper and takes full responsibility for the content.
 
-
-
-*Important Notes for myself*
-- Make sure the PubMed searcher can download the papers and extract the figures
-
-
 ## References
 
 1. Zhang M, Doi L, Awua J, Asare H, Stenhouse R. Challenges and possible solutions for accessing scholarly literature among medical and nursing professionals and students in low-and-middle income countries: A systematic review. Nurse Educ Today. 2023;123:105737. doi:10.1016/j.nedt.2023.105737

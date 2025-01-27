@@ -6,7 +6,7 @@ from Bio import Entrez
 from bs4 import BeautifulSoup
 import json
 from glob import glob
-import fitz
+import pymupdf
 import argparse
 import re
 from urllib.parse import urljoin, urlparse
@@ -26,29 +26,29 @@ class PaperRetriever:
         pdf_urls (list): List of URLs to the PDF versions of the paper.
         is_downloaded (bool): Indicates if the paper has been downloaded.
         filepath (str): Path to the downloaded PDF file.
+        override_previous_attempt (bool): Whether to override a previous download attempt.
         user_agents (list): List of user agents for making requests.
     Methods:
+        download(): Finds and downloads the paper using the DOI or PMID.
         check_open_access(): Checks if the paper is open access using Unpaywall.
+        check_pubmed_central_access(): Checks if the paper is available in PubMed Central.
+        check_crossref_access(doi): Checks if the paper is available on Crossref.
         check_scihub_access(): Checks if the paper is available on Sci-Hub.
-        download_pdf(): Downloads the PDF from the first available URL.
-        pmid_to_doi(pmid): Converts a PMID to a DOI using the Entrez API.
-        find_and_download(override_previous_attempt=False): Finds and downloads the paper.
-        download_from_list(url_list): Downloads PDFs from a list of URLs.
-        create_json_sidecar(download_success, pdf_filepath, json_filepath, url=None): Creates a JSON sidecar file with download information.
+        _download_pdf(): Downloads the PDF from the first available URL.
+        _create_json_sidecar(download_success, pdf_filepath, json_filepath, url=None): Creates a JSON sidecar file with download information.
         _determine_paths(): Determines the file paths for the download.
         _check_if_downloaded(download_directory_or_path, filetype=".pdf"): Checks if a non-corrupted file exists in the specified directory.
         _look_for_previous_download(): Looks for a previous download of the PDF file.
-        _process_doi(doi): Processes and encodes a DOI.
         _get_pdf_element(html_text, mirror): Extracts the PDF link from the HTML text of a Sci-Hub page.
     """
 
-    def __init__(self, email, doi=None, pmid=None, allow_scihub=True, download_directory='PDFs', filename=None):
+    def __init__(self, email, doi=None, pmid=None, allow_scihub=True, download_directory='PDFs', filename=None, override_previous_attempt=False):
         self.email = email
         if not doi and not pmid:
             raise ValueError("Either a DOI or PMID must be provided")
         if not doi and pmid:
-            doi = self.pmid_to_doi(pmid)
-        self.doi = self._process_doi(doi)
+            doi = pmid_to_doi(pmid, email)
+        self.doi = encode_doi(doi)
         self.pmid = pmid
         self.allow_scihub = allow_scihub
         self.is_oa = False
@@ -56,6 +56,7 @@ class PaperRetriever:
         self.pdf_urls = []
         self.is_downloaded = False
         self.filepath = None
+        self.override_previous_attempt = override_previous_attempt
         self.download_directory = download_directory
         self.filename = filename
         self.user_agents = [
@@ -64,6 +65,26 @@ class PaperRetriever:
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:88.0) Gecko/20100101 Firefox/88.0",
             "Mozilla/5.0 (Linux; Android 6.0; Nexus 5 Build/MRA58N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.182 Mobile Safari/537.36",
         ]
+ 
+    def download(self):
+        """
+        Finds and downloads a paper using the DOI or PMID provided.
+        """
+        if not self.override_previous_attempt and self._look_for_previous_download():
+            return self
+        
+        self.check_open_access()
+        self.check_pubmed_central_access()
+        self.check_crossref_access(decode_doi(self.doi))
+        if self.pdf_urls:
+            if self._download_pdf():
+                return self
+        if self.allow_scihub:
+            self.pdf_urls = []
+            self.check_scihub_access().download_pdf()
+        else:
+            self._download_pdf()
+        return self
     
     def check_open_access(self):
         """
@@ -129,7 +150,6 @@ class PaperRetriever:
             else:
                 print(f"Failed to fetch the PubMed Central link. Status code: {response.status_code}")
 
-    
     def check_crossref_access(self, doi):
         base_url = "https://api.crossref.org/works/"
         full_url = f"{base_url}{doi}"
@@ -255,7 +275,7 @@ class PaperRetriever:
                 print("If this error includes 'Connection reset by peer', your ISP may be blocking Sci-Hub. Try using a VPN, like ProtonVPN.")
         return self
 
-    def download_pdf(self):
+    def _download_pdf(self):
         """
         Downloads a PDF from the first successful URL found in the list of PDF URLs.
         Stores the PDF in a specified directory, verifies the download, and creates a JSON sidecar.
@@ -272,7 +292,7 @@ class PaperRetriever:
 
         if not self.pdf_urls:
             self.filepath = "unavailable"
-            self.create_json_sidecar(download_success=False, pdf_filepath=pdf_path, json_filepath=json_path)
+            self._create_json_sidecar(download_success=False, pdf_filepath=pdf_path, json_filepath=json_path)
             return False
 
         for pdf_url in self.pdf_urls:
@@ -284,61 +304,17 @@ class PaperRetriever:
                             f.write(chunk)
                     # Check if the file is downloaded and not corrupted
                     if self._check_if_downloaded(file_directory, '.pdf'):
-                        self.create_json_sidecar(download_success=True, pdf_filepath=pdf_path, json_filepath=json_path, url=pdf_url)
+                        self._create_json_sidecar(download_success=True, pdf_filepath=pdf_path, json_filepath=json_path, url=pdf_url)
                         return True
             except requests.RequestException as e:
                 print(f"Failed to download from {pdf_url} due to: {e}")
 
         # If no URLs resulted in a successful download
         self.filepath = "unavailable"
-        self.create_json_sidecar(download_success=False, pdf_filepath=pdf_path, json_filepath=json_path)
+        self._create_json_sidecar(download_success=False, pdf_filepath=pdf_path, json_filepath=json_path)
         return False
 
-    def pmid_to_doi(self, pmid):
-        """
-        Converts a PMID to a DOI using the Entrez API.
-        """
-        records = entrez_efetch(self.email, pmid)
-        try:
-            id_list = records['PubmedArticle'][0]['PubmedData']['ArticleIdList']
-            for element in id_list:
-                if element.attributes.get('IdType') == 'doi':
-                    return str(element)
-            raise ValueError("No DOI found for this PMID")
-        except Exception as e:
-            print(f"Error processing PMID {pmid}: {e}")
-        return None
-    
-    def find_and_download(self, override_previous_attempt=False):
-        """
-        Finds and downloads a paper using the DOI or PMID provided.
-        """
-        if not override_previous_attempt and self._look_for_previous_download():
-            return self
-        
-        self.check_open_access()
-        self.check_pubmed_central_access()
-        self.check_crossref_access(decode_doi(self.doi))
-        if self.pdf_urls:
-            if self.download_pdf():
-                return self
-        if self.allow_scihub:
-            self.pdf_urls = []
-            self.check_scihub_access().download_pdf()
-        else:
-            self.download_pdf()
-        return self
-    
-    def download_from_list(self, url_list):
-        """
-        Downloads a list of PDF URLs.
-        """
-        for url in url_list:
-            self.pdf_urls.append(url)
-        self.download_pdf()
-        return self
-
-    def create_json_sidecar(self, download_success, pdf_filepath, json_filepath, url=None):
+    def _create_json_sidecar(self, download_success, pdf_filepath, json_filepath, url=None):
         """
         Creates a JSON sidecar file with information about the downloaded paper.
         Args:
@@ -398,7 +374,7 @@ class PaperRetriever:
         
         for file_path in files_with_type:
             try:
-                with fitz.open(file_path) as doc:
+                with pymupdf.open(file_path) as doc:
                     if len(doc) > 0:  
                         non_corrupted_files += 1
             except Exception as e:
@@ -422,13 +398,6 @@ class PaperRetriever:
             return True
         return False
 
-    def _process_doi(self, doi):
-        """
-        Encodes a DOI to remove any URL parameters and return a filename-safe encoded DOI.
-        """
-        clean_doi = doi.split("doi.org/")[-1].split("?")[0]
-        return encode_doi(clean_doi)
-
     def _get_pdf_element(self, html_text, mirror):
         """
         Extracts the PDF link from the HTML text of a Sci-Hub page.
@@ -450,6 +419,7 @@ class PaperRetriever:
 
 def encode_doi(doi):
     """Encodes a DOI for safe inclusion in a filename using URL encoding."""
+    doi = doi.split("doi.org/")[-1].split("?")[0]
     encoded_doi = doi.replace('/', '%2F').replace('-', '%2D').replace('.', '%2E')
     return encoded_doi.strip("'\"")
 
@@ -467,6 +437,21 @@ def entrez_efetch(email, id):
     records = Entrez.read(handle)
     handle.close()
     return records
+
+def pmid_to_doi(pmid, email):
+    """
+    Converts a PMID to a DOI using the Entrez API.
+    """
+    records = entrez_efetch(email, pmid)
+    try:
+        id_list = records['PubmedArticle'][0]['PubmedData']['ArticleIdList']
+        for element in id_list:
+            if element.attributes.get('IdType') == 'doi':
+                return str(element)
+        raise ValueError("No DOI found for this PMID")
+    except Exception as e:
+        print(f"Error processing PMID {pmid}: {e}")
+    return None
 
 def doi_to_pmid(doi, email):
     """
@@ -517,6 +502,7 @@ def main():
     parser.add_argument('--pmid', help='PubMed ID of the paper.')
     parser.add_argument('--dwn-dir', default='PDFs', help='Directory to download the PDFs into. Defaults to "PDFs".')
     parser.add_argument('--filename', help='Custom filename for the downloaded PDF.')
+    parser.add_argument('--override', action='store_true', help='Override previous download attempts.')
     parser.add_argument('--allow-scihub', action='store_true', default=True, help='Allow downloading from Sci-Hub if available.')
 
     args = parser.parse_args()
@@ -527,10 +513,11 @@ def main():
         pmid=args.pmid,
         download_directory=args.dwn_dir,
         filename=args.filename,
+        override_previous_attempt=args.override,
         allow_scihub=args.allow_scihub
     )
 
-    retriever.find_and_download()
+    retriever.download()
 
 if __name__ == '__main__':
     main()

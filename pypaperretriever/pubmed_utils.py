@@ -10,7 +10,7 @@ from itertools import chain
 from lxml import etree
 from tqdm import tqdm
 
-from pypaperretriever import PaperRetriever
+from pypaperretriever import PaperRetriever, ImageExtractor
 
 tqdm.pandas()
 
@@ -26,6 +26,7 @@ class PubMedSearcher:
     User-Facing Methods:
     - search: Searches PubMed for articles based on the search string and retrieves the specified number of articles.
     - download_articles: Downloads articles from the DataFrame to the specified directory (open access is prioritized, but may use PyPaperBot as a fallback).
+    - extract_images: Extracts images from the PDFs of the articles in the DataFrame.
     - fetch_references: Fetches references for each article in the DataFrame using multiple methods.
     - standardize_references: Standardizes the references column in the DataFrame to only contain the following keys: ['doi', 'pmid', 'pmcid', 'title', 'authors']
     - fetch_cited_by: Fetches list of articles that cite each article in the DataFrame using Europe PMC (only works for articles with a record in Europe PMC)
@@ -33,7 +34,7 @@ class PubMedSearcher:
     - save: Saves the df to a CSV file.
     """
 
-    def __init__(self, search_string=None, df=None, email="lesion_bank@gmail.com"):
+    def __init__(self, search_string=None, df=None, email="bobtester@gmail.com"):
         """
         Initializes the PubMedSearcher object with a search string and an optional DataFrame.
 
@@ -125,13 +126,12 @@ class PubMedSearcher:
             if not doi or len(str(doi)) < 5:
                 self.df.at[index, 'download_complete'] = 'unavailable'
                 continue
-            pdf_filepath = PaperRetriever(
-                                        pmid=pmid,
+            pdf_filepath = PaperRetriever(pmid=pmid,
                                         doi=doi,
                                         email=self.email,
                                         allow_scihub=allow_scihub,
                                         download_directory=download_directory
-                                    ).find_and_download().filepath
+                                    ).download().filepath
             if pdf_filepath in [None, '', 'unavailable']:
                 self.df.at[index, 'download_complete'] = 'unavailable'
                 self.df.at[index, 'pdf_filepath'] = None
@@ -140,6 +140,78 @@ class PubMedSearcher:
                 self.df.at[index, 'pdf_filepath'] = pdf_filepath
             articles_processed += 1
             self.save()
+        return self
+    
+    def extract_images(self, image_directory="extracted_images"):
+        """
+        Extracts images from the PDFs of the articles in the DataFrame using the ImageExtractor class.
+        Only applies to successfully downloaded PDFs.
+        
+        Parameters:
+        - image_directory (str): The base directory where extracted images will be stored.
+        """
+        if self.df.empty:
+            print("DataFrame is empty. No articles to extract images from.")
+            return
+        
+        required_columns = ['download_complete', 'pdf_filepath']
+        for col in required_columns:
+            if col not in self.df.columns:
+                print(f"Error: DataFrame is missing required column '{col}'.")
+                return
+        
+        # Initialize columns for image paths and extraction status if they don't exist
+        if 'image_paths' not in self.df.columns:
+            self.df['image_paths'] = [[] for _ in range(len(self.df))]
+        if 'image_extraction_complete' not in self.df.columns:
+            self.df['image_extraction_complete'] = 'not_started'
+        
+        # Iterate over the DataFrame with a progress bar
+        for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Extracting Images"):
+            # Skip if download was not complete
+            if row.get('download_complete') != 'complete':
+                continue
+            
+            # Skip if image extraction is already complete
+            if row.get('image_extraction_complete') == 'complete':
+                continue
+            
+            pdf_filepath = row.get('pdf_filepath')
+            if not pdf_filepath or not os.path.isfile(pdf_filepath):
+                self.df.at[index, 'image_extraction_complete'] = 'pdf_not_found'
+                continue
+            
+            try:
+                # Determine a unique directory for extracted images for this PDF
+                # e.g., extracted_images/pmid/
+                pmid = row.get('pmid', f"index_{index}")
+                pdf_image_dir = os.path.join(image_directory, str(pmid))
+                os.makedirs(pdf_image_dir, exist_ok=True)
+                
+                # Initialize the ImageExtractor with the PDF file path
+                extractor = ImageExtractor(pdf_file_path=pdf_filepath)
+                
+                # Override the default image directory in ImageExtractor to store in pdf_image_dir
+                extractor.dir = pdf_image_dir
+                
+                # Extract images
+                extractor.extract_images()
+                
+                # Retrieve the list of extracted image paths
+                extracted_images = extractor.img_paths
+                
+                # Update the DataFrame with the extracted image paths
+                self.df.at[index, 'image_paths'] = extracted_images
+                self.df.at[index, 'image_extraction_complete'] = 'complete' if extracted_images else 'no_images_found'
+            
+            except Exception as e:
+                print(f"Error extracting images for PMID {row.get('pmid', 'Unknown')}: {e}")
+                self.df.at[index, 'image_extraction_complete'] = 'failed'
+            
+            # Optionally, save progress after each extraction
+            self.save()
+        
+        print("Image extraction process completed.")
         return self
 
     def fetch_references(self):
