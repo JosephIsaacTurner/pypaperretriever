@@ -1,16 +1,18 @@
 # PyPaperRetriever: A Python Tool for Finding and Downloading Scientific Literature
 ### **Authors: Joseph I Turner<sup>1</sup>**
-#### <sup>1</sup> josephisaacturner@gmail.com | Center for Brain Circuit Therapeutics, Harvard Medical School
+#### <sup>1</sup> Center for Brain Circuit Therapeutics, Harvard Medical School
 
 ## Summary
 
 PyPaperRetriever is a Python tool designed to simplify the process of finding and downloading scientific literature. For any given DOI or PubMed ID, PyPaperRetriever communicates with multiple APIs, including Unpaywall, NIH's Entrez, CrossRef, and Sci-Hub, to locate and download PDFs directly to the user's system. The tool is user-friendly, featuring a simple command-line interface and functionality that can be imported into Python scripts for seamless integration into workflows. PyPaperRetriever offers a significant advantage over other tools by leveraging multiple APIs to ensure broad coverage, prioritizing open-access sources, and enabling PubMed ID-based searches. Additionally, PyPaperRetriever allows users to programmatically search PubMed with custom queries and download PDFs of search results, making it an essential resource for researchers conducting literature reviews or managing large datasets.
 
-<img src="pypaperretriever_figure_v1.svg" alt="PyPaperRetriever Figure" width="800"/>
-
 ### Core Features
 
+<img src="pypaperretriever_figure_v1.svg" alt="PyPaperRetriever Figure 1" width="500"/>
+
 **1. Find and Download PDFs for a Given DOI or PubMed ID:** PyPaperRetriever can find and download PDFs for a given DOI or PubMed ID by querying multiple APIs, including Unpaywall, NIH's Entrez, CrossRef, and Sci-Hub. If a PDF is found, PyPaperRetriever will download it to the user's computer.
+
+<img src="pypaperretriever_figure2_v1.svg" alt="PyPaperRetriever Figure 2" width="500"/>
 
 **2. Search PubMed programatically:** PyPaperRetriever can search PubMed using a query string and download PDFs of the search results. This feature is useful for researchers who want to download multiple papers based on a specific topic or keyword.
 

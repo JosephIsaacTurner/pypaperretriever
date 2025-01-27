@@ -2,6 +2,8 @@ import requests
 from Bio import Entrez
 import re
 
+from .pubmed_utils import doi_to_pmid
+
 class ReferenceRetriever:
     
     def __init__(self, email, doi=None, pmid=None):
@@ -14,7 +16,7 @@ class ReferenceRetriever:
         # If DOI is provided, try to convert it to PMID
         if self.doi and not self.pmid:
             print(f"[ReferenceRetriever] Converting DOI to PMID for DOI: {self.doi}")
-            self.pmid = self.doi_to_pmid(self.doi)
+            self.pmid = doi_to_pmid(self.doi, self.email)
             print(f"[ReferenceRetriever] Converted DOI {self.doi} to PMID: {self.pmid}")
 
     def fetch_references(self):
@@ -42,7 +44,7 @@ class ReferenceRetriever:
         if not self.pmid:
             if self.doi:
                 print(f"[ReferenceRetriever] Converting DOI to PMID for DOI: {self.doi}")
-                self.pmid = self.doi_to_pmid(self.doi)
+                self.pmid = doi_to_pmid(self.doi, self.email)
                 print(f"[ReferenceRetriever] Converted DOI {self.doi} to PMID: {self.pmid}")
                 if not self.pmid:
                     raise ValueError("Unable to convert DOI to PMID.")
@@ -74,7 +76,7 @@ class ReferenceRetriever:
                 print(f"[ReferenceRetriever] No metadata found for PMID: {self.pmid}")
         elif self.doi:
             print(f"[ReferenceRetriever] Fetching metadata using DOI: {self.doi}")
-            pmid = self.doi_to_pmid(self.doi)
+            pmid = doi_to_pmid(self.doi, self.email)
             if pmid:
                 print(f"[ReferenceRetriever] Converted DOI {self.doi} to PMID: {pmid}")
                 articles = self._fetch_articles_details([pmid])
@@ -380,63 +382,3 @@ class ReferenceRetriever:
                 formatted_authors.append(f"{author['family']} {author['given']}")
         print(f"[ReferenceRetriever] Formatted {len(formatted_authors)} CrossRef authors.")
         return ', '.join(formatted_authors)
-
-    def pmid_to_doi(self, pmid):
-        """
-        Converts a PMID to a DOI using the Entrez API.
-        """
-        print(f"[ReferenceRetriever] Converting PMID {pmid} to DOI.")
-        Entrez.email = self.email
-        try:
-            handle = Entrez.efetch(db="pubmed", id=pmid, retmode="xml")
-            records = Entrez.read(handle)
-            handle.close()
-            id_list = records['PubmedArticle'][0]['PubmedData']['ArticleIdList']
-            for element in id_list:
-                if element.attributes.get('IdType') == 'doi':
-                    doi = str(element)
-                    print(f"[ReferenceRetriever] Converted PMID {pmid} to DOI: {doi}")
-                    return doi
-            print(f"[ReferenceRetriever] No DOI found for PMID {pmid}.")
-            return None
-        except Exception as e:
-            print(f"[ReferenceRetriever] Error processing PMID {pmid}: {e}")
-        return None
-
-    def doi_to_pmid(self, doi):
-        """
-        Converts a DOI to a PMID using the Entrez API, and if that fails, uses the PMC API.
-        """
-        print(f"[ReferenceRetriever] Converting DOI {doi} to PMID.")
-        Entrez.email = self.email
-        try:
-            search_handle = Entrez.esearch(db="pubmed", term=doi)
-            search_results = Entrez.read(search_handle)
-            search_handle.close()
-            if search_results['IdList']:
-                pmid = search_results['IdList'][0]
-                print(f"[ReferenceRetriever] Converted DOI {doi} to PMID: {pmid}")
-                return pmid
-            else:
-                print(f"[ReferenceRetriever] No PMID found for DOI {doi} in Entrez PubMed.")
-        except Exception as e:
-            print(f"[ReferenceRetriever] Error converting DOI {doi} to PMID via Entrez: {e}")
-
-        try:
-            url_base = "https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/v1.0/?"
-            url = f"{url_base}ids={doi}&format=json"
-            print(f"[ReferenceRetriever] Requesting PMID via PMC ID Converter from URL: {url}")
-            response = requests.get(url)
-            if response.status_code == 200:
-                data = response.json()
-                pmid = data.get("records", [{}])[0].get("pmid", None)
-                if pmid:
-                    print(f"[ReferenceRetriever] Converted DOI {doi} to PMID via PMC: {pmid}")
-                    return pmid
-                else:
-                    print(f"[ReferenceRetriever] PMC ID Converter did not return a PMID for DOI {doi}.")
-            else:
-                print(f"[ReferenceRetriever] PMC ID Converter request failed with status code: {response.status_code}")
-        except Exception as e:
-            print(f"[ReferenceRetriever] Error converting DOI {doi} to PMID via PMC ID Converter: {e}")
-        return None

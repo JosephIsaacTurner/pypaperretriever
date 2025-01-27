@@ -1,5 +1,5 @@
 import os
-import pymupdf
+import fitz as pymupdf
 import numpy as np
 import cv2
 from pdf2image import convert_from_path
