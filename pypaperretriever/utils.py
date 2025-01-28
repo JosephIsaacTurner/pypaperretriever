@@ -30,7 +30,6 @@ def doi_to_pmid(doi, email):
     """
     Converts a DOI to a PMID using the Entrez API, and if that fails, uses the PMC API.
     """
-    print(f"[ReferenceRetriever] Converting DOI {doi} to PMID.")
     Entrez.email = email
     try:
         search_handle = Entrez.esearch(db="pubmed", term=doi)
@@ -38,30 +37,23 @@ def doi_to_pmid(doi, email):
         search_handle.close()
         if search_results['IdList']:
             pmid = search_results['IdList'][0]
-            print(f"[ReferenceRetriever] Converted DOI {doi} to PMID: {pmid}")
             return pmid
-        else:
-            print(f"[ReferenceRetriever] No PMID found for DOI {doi} in Entrez PubMed.")
     except Exception as e:
         print(f"[ReferenceRetriever] Error converting DOI {doi} to PMID via Entrez: {e}")
 
     try:
         url_base = "https://www.ncbi.nlm.nih.gov/pmc/utils/idconv/v1.0/?"
         url = f"{url_base}ids={doi}&format=json"
-        print(f"[ReferenceRetriever] Requesting PMID via PMC ID Converter from URL: {url}")
         response = requests.get(url)
         if response.status_code == 200:
             data = response.json()
             pmid = data.get("records", [{}])[0].get("pmid", None)
             if pmid:
-                print(f"[ReferenceRetriever] Converted DOI {doi} to PMID via PMC: {pmid}")
                 return pmid
-            else:
-                print(f"[ReferenceRetriever] PMC ID Converter did not return a PMID for DOI {doi}.")
         else:
-            print(f"[ReferenceRetriever] PMC ID Converter request failed with status code: {response.status_code}")
+            print(f"[PyPaperRetriever] PMC ID Converter request failed with status code: {response.status_code}")
     except Exception as e:
-        print(f"[ReferenceRetriever] Error converting DOI {doi} to PMID via PMC ID Converter: {e}")
+        print(f"[PyPaperRetriever] Error converting DOI {doi} to PMID via PMC ID Converter: {e}")
     return None
 
 def encode_doi(doi):

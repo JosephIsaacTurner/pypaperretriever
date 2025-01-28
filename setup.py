@@ -20,7 +20,7 @@ setup(
     install_requires=requirements,
     entry_points={
         'console_scripts': [
-            'pypaperretriever = pypaperretriever.pypaperretriever:main'
+            'pypaperretriever = pypaperretriever.paper_retriever:main'
         ],
     },
     python_requires='>=3.6',

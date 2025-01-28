@@ -85,9 +85,11 @@ class PaperRetriever:
         if self.allow_scihub:
             self.pdf_urls = []
             self.check_scihub_access()
-            if self.on_scihub:
+            if len(self.pdf_urls) > 0:
                 print("[PyPaperRetriever] Found PDF on Sci-Hub. Attempting download...")
                 self._download_pdf()
+            else:
+                print(f"[PyPaperRetriever] No PDFs found for {decode_doi(self.doi)}")
         else:
             print(f"[PyPaperRetriever] No Open-Access PDF found for {decode_doi(self.doi)}. Sci-Hub access is disabled.")
         return self
@@ -314,10 +316,10 @@ class PaperRetriever:
                     # Check if the file is downloaded and not corrupted
                     if self._check_if_downloaded(file_directory, '.pdf'):
                         self._create_json_sidecar(download_success=True, pdf_filepath=pdf_path, json_filepath=json_path, url=pdf_url)
-                        print(f"[PyPaperRetriever] PDF downloaded successfully to {pdf_path} for {decode_doi(self.doi)}")
+                        print(f"[PyPaperRetriever] PDF downloaded successfully to {pdf_path} for {decode_doi(self.doi)} from {pdf_url}")
                         return True
             except requests.RequestException as e:
-                print(f"Failed to download from {pdf_url} due to: {e}")
+                continue
 
         # If no URLs resulted in a successful download
         self.filepath = "unavailable"
@@ -455,6 +457,3 @@ def main():
     )
 
     retriever.download()
-
-if __name__ == '__main__':
-    main()

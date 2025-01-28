@@ -35,7 +35,7 @@ class PubMedSearcher:
     - save: Saves the df to a CSV file.
     """
 
-    def __init__(self, search_string=None, df=None, email="bobtester@gmail.com"):
+    def __init__(self, search_string=None, df=None, email=""):
         """
         Initializes the PubMedSearcher object with a search string and an optional DataFrame.
 
@@ -50,7 +50,11 @@ class PubMedSearcher:
             self._validate_dataframe(df)
         elif search_string is not None:
             self.df = pd.DataFrame()
-        self.email = email
+        if email:
+            self.email = email
+        else:
+            print("Please provide an email address to use for querying PubMed.")
+            raise ValueError("Email address is required for PubMed queries.")
 
     def search(self, count=10, min_date=None, max_date=None, order_by='chronological', only_open_access=False, only_case_reports=False):
         """
