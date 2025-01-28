@@ -1,4 +1,4 @@
-pandas==1.5.2
+pandas==2.2.3
 setuptools==75.8.0
 numpy==1.26
 tqdm==4.64.1
@@ -7,3 +7,6 @@ lxml==5.2.0
 requests==2.31.0
 PyMuPDF==1.24.1
 pdf2image==1.17.0
+pytest==8.3.4
+beautifulsoup4==4.12.3
+opencv-python==4.11.0.86

@@ -2,7 +2,50 @@ import pandas as pd
 from .reference_retriever import ReferenceRetriever
 
 class PaperTracker:
+    """
+    A class for tracking academic paper citations both upstream (references) and downstream (papers that cite it).
+    
+    This class analyzes the citation network around a given paper, creating a structured DataFrame
+    that captures both papers it cites (upstream) and papers that cite it (downstream) up to
+    specified generational depths. Each paper's metadata and its relationships within the citation
+    network are tracked.
+
+    Attributes:
+        email (str): Email for API authentication
+        max_upstream_generations (int): Maximum depth to track references of references
+        max_downstream_generations (int): Maximum depth to track papers citing papers that cite this one
+        doi (str): Digital Object Identifier of the root paper
+        pmid (str): PubMed ID of the root paper
+        df (pd.DataFrame): DataFrame storing paper metadata and citation relationships
+        processed_upstream (set): Set of paper IDs already processed in upstream tracking
+        processed_downstream (set): Set of paper IDs already processed in downstream tracking
+
+    The resulting DataFrame contains columns for:
+        - doi: Digital Object Identifier
+        - pmid: PubMed ID
+        - title: Paper title
+        - authors: Paper authors
+        - year: Publication year
+        - upstream_generation: Steps away from root paper in reference direction
+        - downstream_generation: Steps away from root paper in citation direction
+        - children_identifiers: List of papers this paper cites/references
+        - parent_identifiers: List of papers that cite this paper
+    """
+
     def __init__(self, email, max_upstream_generations=1, max_downstream_generations=1, doi=None, pmid=None):
+        """
+        Initialize the PaperTracker with either a DOI or PMID.
+
+        Args:
+            email (str): Email for API authentication
+            max_upstream_generations (int, optional): Maximum reference depth to track. Defaults to 1.
+            max_downstream_generations (int, optional): Maximum citation depth to track. Defaults to 1.
+            doi (str, optional): Digital Object Identifier of the paper. Required if pmid not provided.
+            pmid (str, optional): PubMed ID of the paper. Required if doi not provided.
+
+        Raises:
+            ValueError: If neither DOI nor PMID is provided
+        """
         if not doi and not pmid:
             raise ValueError("Either DOI or PMID must be provided.")
         self.email = email
@@ -22,16 +65,45 @@ class PaperTracker:
         self.processed_downstream = set()
 
     def go_upstream(self, doi=None, pmid=None):
+        """
+        Fetch references for a given paper.
+
+        Args:
+            doi (str, optional): Digital Object Identifier of the paper
+            pmid (str, optional): PubMed ID of the paper
+
+        Returns:
+            list: List of dictionaries containing reference paper metadata
+        """
         print(f"[PaperTracker] Going upstream for DOI: {doi}, PMID: {pmid}")
         retriever = ReferenceRetriever(email=self.email, doi=doi, pmid=pmid)
         return retriever.fetch_references()
 
     def go_downstream(self, doi=None, pmid=None):
+        """
+        Fetch papers that cite the given paper.
+
+        Args:
+            doi (str, optional): Digital Object Identifier of the paper
+            pmid (str, optional): PubMed ID of the paper
+
+        Returns:
+            list: List of dictionaries containing citing paper metadata
+        """
         print(f"[PaperTracker] Going downstream for DOI: {doi}, PMID: {pmid}")
         retriever = ReferenceRetriever(email=self.email, doi=doi, pmid=pmid)
         return retriever.fetch_cited_by()
 
     def track_paper(self):
+        """
+        Build the complete citation network around the root paper.
+        
+        This method initiates both upstream (reference) and downstream (citation)
+        tracking up to the specified generation limits.
+
+        Returns:
+            pd.DataFrame: DataFrame containing all tracked papers and their relationships
+        """
         print(f"[PaperTracker] Starting tracking process for DOI: {self.doi}, PMID: {self.pmid}")
         self._track_upstream(self.doi, self.pmid, 0, None)
         self._track_downstream(self.doi, self.pmid, 0, None)
@@ -39,6 +111,18 @@ class PaperTracker:
         return self.df
 
     def _track_upstream(self, doi, pmid, generation, parent_id):
+        """
+        Recursively track references up to max_upstream_generations.
+
+        Internal method that builds the reference network by following each paper's
+        references and updating the tracking DataFrame.
+
+        Args:
+            doi (str): Digital Object Identifier of the current paper
+            pmid (str): PubMed ID of the current paper
+            generation (int): Current generation/depth in the reference tree
+            parent_id (str): Identifier of the paper that cited this one
+        """
         paper_id = doi if doi else pmid
         print(f"[PaperTracker] Tracking upstream - Generation: {generation}, Paper ID: {paper_id}, Parent ID: {parent_id}")
 
@@ -70,7 +154,6 @@ class PaperTracker:
             'parent_identifiers': [parent_id] if parent_id else []
         })
 
-        # Append the new row to the DataFrame using pd.concat
         print(f"[PaperTracker] Adding Paper ID: {paper_id} to tracker DataFrame.")
         self.df = pd.concat([self.df, pd.DataFrame([paper_data])], ignore_index=True)
 
@@ -84,7 +167,6 @@ class PaperTracker:
                 continue
             print(f"[PaperTracker] Processing reference ID: {ref_id}")
             self._track_upstream(ref.get('doi'), ref.get('pmid'), generation + 1, paper_id)
-            # Safely append to the 'children_identifiers' list
             idx = self.df[self.df['doi'] == paper_id].index
             if not idx.empty:
                 current_children = self.df.at[idx[0], 'children_identifiers']
@@ -94,6 +176,18 @@ class PaperTracker:
                 print(f"[PaperTracker] Updated children_identifiers for Paper ID: {paper_id}")
 
     def _track_downstream(self, doi, pmid, generation, parent_id):
+        """
+        Recursively track citations up to max_downstream_generations.
+
+        Internal method that builds the citation network by following each paper's
+        citations and updating the tracking DataFrame.
+
+        Args:
+            doi (str): Digital Object Identifier of the current paper
+            pmid (str): PubMed ID of the current paper
+            generation (int): Current generation/depth in the citation tree
+            parent_id (str): Identifier of the paper that this one cites
+        """
         paper_id = doi if doi else pmid
         print(f"[PaperTracker] Tracking downstream - Generation: {generation}, Paper ID: {paper_id}, Parent ID: {parent_id}")
 
@@ -125,7 +219,6 @@ class PaperTracker:
             'parent_identifiers': [parent_id] if parent_id else []
         })
 
-        # Append the new row to the DataFrame using pd.concat
         print(f"[PaperTracker] Adding Paper ID: {paper_id} to tracker DataFrame.")
         self.df = pd.concat([self.df, pd.DataFrame([paper_data])], ignore_index=True)
 
@@ -139,7 +232,6 @@ class PaperTracker:
                 continue
             print(f"[PaperTracker] Processing citing article ID: {cite_id}")
             self._track_downstream(cite.get('doi'), cite.get('pmid'), generation + 1, paper_id)
-            # Safely append to the 'children_identifiers' list
             idx = self.df[self.df['doi'] == paper_id].index
             if not idx.empty:
                 current_children = self.df.at[idx[0], 'children_identifiers']
@@ -149,6 +241,16 @@ class PaperTracker:
                 print(f"[PaperTracker] Updated children_identifiers for Paper ID: {paper_id}")
 
     def _get_paper_metadata(self, doi, pmid):
+        """
+        Fetch metadata for a given paper.
+
+        Args:
+            doi (str): Digital Object Identifier of the paper
+            pmid (str): PubMed ID of the paper
+
+        Returns:
+            dict: Paper metadata including doi, pmid, title, authors, and year
+        """
         print(f"[PaperTracker] Fetching metadata for DOI: {doi}, PMID: {pmid}")
         retriever = ReferenceRetriever(email=self.email, doi=doi, pmid=pmid)
         metadata = retriever.get_paper_metadata()
@@ -162,8 +264,8 @@ class PaperTracker:
             'title': metadata.get('title', ''),
             'authors': metadata.get('authors', ''),
             'year': metadata.get('year', ''),
-            'upstream_generation': None,       # Will be set in the calling method
-            'downstream_generation': None,     # Will be set in the calling method
+            'upstream_generation': None,
+            'downstream_generation': None,
             'children_identifiers': [],
             'parent_identifiers': []
         }
