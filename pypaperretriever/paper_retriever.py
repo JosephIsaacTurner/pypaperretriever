@@ -87,10 +87,14 @@ class PaperRetriever:
             if len(self.pdf_urls) > 0:
                 print("[PyPaperRetriever] Found PDF on Sci-Hub. Attempting download...")
                 self._download_pdf()
+                if self.is_downloaded:
+                    return self
             else:
                 print(f"[PyPaperRetriever] No PDFs found for {decode_doi(self.doi)}")
+                
         else:
             print(f"[PyPaperRetriever] No Open-Access PDF found for {decode_doi(self.doi)}. Sci-Hub access is disabled.")
+        self._download_pdf() # Just to create JSON sidecar
         return self
     
     def check_open_access(self):
@@ -441,9 +445,11 @@ def main():
     parser.add_argument('--dwn-dir', default='PDFs', help='Directory to download the PDFs into. Defaults to "PDFs".')
     parser.add_argument('--filename', help='Custom filename for the downloaded PDF.')
     parser.add_argument('--override', action='store_true', help='Override previous download attempts.')
-    parser.add_argument('--allow-scihub', action='store_true', default=True, help='Allow downloading from Sci-Hub if available.')
+    parser.add_argument('--allow-scihub', choices=['true', 'false'], default='true',
+                    help='Allow downloading from Sci-Hub if available (true/false).')
 
     args = parser.parse_args()
+    args.allow_scihub = args.allow_scihub.lower() == 'true' 
 
     retriever = PaperRetriever(
         email=args.email,

@@ -7,7 +7,7 @@ from pathlib import Path
 from pypaperretriever import PubMedSearcher
 
 # Test config
-TEST_EMAIL = "bobtester@jojo.org"
+TEST_EMAIL = "bob_tester@testemail.com"
 TEST_SEARCH_STRING = "brain lesions"
 
 # Paths to stored XML fixtures

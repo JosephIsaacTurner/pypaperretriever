@@ -186,7 +186,7 @@ class PubMedSearcher:
             self.save()
         return self
     
-    def extract_images(self, image_directory="extracted_images"):
+    def extract_images(self):
         """
         Extracts images from the PDFs of the articles in the DataFrame using the ImageExtractor class.
         Only applies to successfully downloaded PDFs.
@@ -225,18 +225,9 @@ class PubMedSearcher:
                 self.df.at[index, 'image_extraction_complete'] = 'pdf_not_found'
                 continue
             
-            try:
-                # Determine a unique directory for extracted images for this PDF
-                # e.g., extracted_images/pmid/
-                pmid = row.get('pmid', f"index_{index}")
-                pdf_image_dir = os.path.join(image_directory, str(pmid))
-                os.makedirs(pdf_image_dir, exist_ok=True)
-                
+            try:             
                 # Initialize the ImageExtractor with the PDF file path
                 extractor = ImageExtractor(pdf_file_path=pdf_filepath)
-                
-                # Override the default image directory in ImageExtractor to store in pdf_image_dir
-                extractor.dir = pdf_image_dir
                 
                 # Extract images
                 extractor.extract_images()
