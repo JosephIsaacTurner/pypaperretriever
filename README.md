@@ -1,4 +1,4 @@
-## PyPaperRetriever
+# PyPaperRetriever
 
 <img src="logo.png" width="200">
 
@@ -10,37 +10,126 @@
 pip install git+https://github.com/josephisaacturner/pypaperretriever.git
 ```
 
-### Usage
-#### A. Pythonic OOP approach
-
-```python
-from pypaperretriever import PyPaperRetriever
-
-doi = "10.1056/NEJMra1706158"
-email = "your_email@gmail.com"
-download_dir = "pdf_downloads"
-allow_scihub = True # If False, will only use open-access sources
-filename = "fox_nejfm_2018.pdf" # Optional, defaults to doi-<doi>/doi-<doi>.pdf for interoperability with PyBIDS
-
-retriever = PyPaperRetriever(email=email, doi=doi, download_directory=download_dir, allow_scihub=allow_scihub)
-result = retriever.find_and_download()
-if result.is_downloaded:
-    print("Downloaded to", result.filepath)
-```
-
-#### B. Command-line approach
-
-```bash 
-python -m pypaperretriever --email your_email@gmail.com --doi 10.1056/NEJMra1706158 --dwn-dir pdf_downloads --allow-scihub --filename fox_nejfm_2018.pdf
-```
-
 ### Features
 
-- Retrieve papers by DOI or PMID
-- Finds all available sources from Unpaywall and Sci-Hub
-- Keeps track of sources used for each download by saving a json sidecar file for each download attempt
-- Won't download the same paper twice if it's already been downloaded
-- Specify your own filepath, or use our default naming convention that follows BIDS standards (https://bids-specification.readthedocs.io/en/stable/)
-- Command-line interface for easy use in scripts
-- Pythonic class-based for flexibility and extensibility
-- Improves upon PyPaperBot by allowing open-access sources and improves web-scraping robustness to find more papers that are overlooked by PyPaperBot
+- Download papers using DOI or PubMed ID (PMID)
+- Search PubMed programmatically with advanced query options
+- Track citation networks (both upstream and downstream) for papers of interest
+- Extract images from downloaded PDFs
+- Find all available sources from Unpaywall and optional Sci-Hub integration
+- Keep track of sources used via JSON sidecar files for each download
+- Avoid duplicate downloads with intelligent checking
+- BIDS-compatible file naming convention
+- Both command-line and Python API interfaces
+- Advanced search capabilities with customizable filters
+- Citation network analysis tools
+
+### Usage Examples
+
+For complete examples, see [examples.ipynb](examples.ipynb) in the repository.
+
+#### 1. Download Using DOI
+
+```python
+from pypaperretriever import PaperRetriever
+
+retriever = PaperRetriever(
+    email="your.email@gmail.com",
+    doi="10.7759/cureus.76081",
+    download_directory='PDFs'
+)
+retriever.download()
+
+# Command-line alternative
+pypaperretriever --doi 10.7759/cureus.76081 --email your.email@gmail.com --dwn-dir PDFs
+```
+
+#### 2. Download Using PubMed ID
+
+```python
+from pypaperretriever import PaperRetriever
+
+retriever = PaperRetriever(
+    email="your.email@gmail.com",
+    pmid="33813262",
+    download_directory='PDFs'
+)
+retriever.download()
+
+# Command-line alternative
+pypaperretriever --pmid 33813262 --email your.email@gmail.com --dwn-dir PDFs
+```
+
+#### 3. Control Sci-Hub Access
+
+```python
+retriever = PaperRetriever(
+    email="your.email@gmail.com",
+    doi="10.1016/j.revmed.2011.10.009",
+    download_directory='PDFs',
+    allow_scihub=False  # Set to True to enable Sci-Hub
+)
+retriever.download()
+```
+
+#### 4. Extract Images from PDFs
+
+```python
+from pypaperretriever import ImageExtractor
+
+extractor = ImageExtractor('path/to/your/paper.pdf')
+extractor.extract_images()
+```
+
+#### 5. Search PubMed Programmatically
+
+```python
+from pypaperretriever import PubMedSearcher
+
+search_query = """("brain lesions"[MeSH Terms] OR "brain lesion"[Title/Abstract] OR 
+                   "cerebral lesion"[Title/Abstract]) AND (case reports[Publication Type])"""
+
+searcher = PubMedSearcher(search_string=search_query, email="your.email@gmail.com")
+
+results = searcher.search(
+    count=10,
+    order_by='relevance',  # or 'chronological'
+    only_open_access=False,
+    only_case_reports=False
+)
+
+# Download found articles
+searcher.download_articles(download_directory='PDFs', allow_scihub=True)
+
+# Extract images from downloaded articles
+searcher.extract_images()
+```
+
+#### 6. Track Citation Networks
+
+```python
+from pypaperretriever import PaperTracker
+
+tracker = PaperTracker(
+    email="your.email@gmail.com",
+    doi='10.1097/RLU.0000000000001894',
+    max_upstream_generations=1,   # Papers referenced by your paper
+    max_downstream_generations=1  # Papers that cite your paper
+)
+
+results = tracker.track_paper()
+```
+
+### Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+### License
+
+MIT License
+
+### Citation
+
+If you use PyPaperRetriever in your research, please cite:
+
+[Add citation information here later]
