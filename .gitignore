@@ -1,5 +1,7 @@
 /pdf_downloads
 /PDFs
+/jats
+paper/jats
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
