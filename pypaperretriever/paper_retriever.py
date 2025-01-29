@@ -2,7 +2,6 @@ import os
 import requests
 import time
 import random
-from Bio import Entrez
 from bs4 import BeautifulSoup
 import json
 from glob import glob

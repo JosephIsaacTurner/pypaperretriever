@@ -1,38 +1,51 @@
 import os
-import re
 
-import numpy as np
 import pandas as pd
 import requests
 from Bio import Entrez
 from io import BytesIO
-from itertools import chain
-from lxml import etree
 from tqdm import tqdm
 
 from .paper_retriever import PaperRetriever
 from .image_extractor import ImageExtractor
+from .reference_retriever import ReferenceRetriever
 
 tqdm.pandas()
 
 class PubMedSearcher:
     """
-    A class to search PubMed for articles based on a search string and retrieve article information.
+    A class to search PubMed for articles, retrieve metadata, download full texts, and process references.
 
     Attributes:
-    - search_string (str): The search string to use when querying PubMed.
-    - df (DataFrame): A DataFrame containing the retrieved articles.
-    - email (str): The email address to use when querying PubMed.
+    - search_string (str): Query string for searching PubMed.
+    - df (DataFrame): Stores retrieved article metadata, references, and processing statuses.
+    - email (str): Email address required for querying PubMed via Entrez.
 
-    User-Facing Methods:
-    - search: Searches PubMed for articles based on the search string and retrieves the specified number of articles.
-    - download_articles: Downloads articles from the DataFrame to the specified directory (open access is prioritized, but may use PyPaperBot as a fallback).
-    - extract_images: Extracts images from the PDFs of the articles in the DataFrame.
-    - fetch_references: Fetches references for each article in the DataFrame using multiple methods.
-    - standardize_references: Standardizes the references column in the DataFrame to only contain the following keys: ['doi', 'pmid', 'pmcid', 'title', 'authors']
-    - fetch_cited_by: Fetches list of articles that cite each article in the DataFrame using Europe PMC (only works for articles with a record in Europe PMC)
-    - download_xml_fulltext: Downloads the XML full text for each article in the DataFrame to the specified directory (rarely available, but can be useful).
-    - save: Saves the df to a CSV file.
+    Core Methods:
+    - search(count, min_date, max_date, order_by, only_open_access, only_case_reports): 
+      Retrieves PubMed articles based on the search query with filtering options.
+    - fetch_abstracts(): 
+      Fetches missing abstracts from PubMed for articles in the DataFrame.
+    - download_articles(allow_scihub, download_directory, max_articles): 
+      Downloads full-text PDFs, prioritizing open access sources.
+    - extract_images(image_directory): 
+      Extracts images from downloaded PDFs and stores them.
+    - fetch_references(): 
+      Retrieves references for each article using multiple sources (PubMed, PMC, CrossRef, Europe PMC).
+    - fetch_cited_by(): 
+      Retrieves articles that cite each article using Europe PMC.
+    - download_xml_fulltext(download_directory): 
+      Downloads XML full-text versions when available (PubMed Open Access, Europe PMC).
+    - save(csv_path): 
+      Saves the DataFrame to a CSV file.
+
+    Internal Helper Methods:
+    - _validate_dataframe(df): Ensures DataFrame contains necessary columns.
+    - _parse_records_to_df(records_xml_bytes): Converts retrieved PubMed records to a DataFrame.
+    - _get_xml_for_pmcid(pmcid): Fetches full-text XML for an article using a PMCID.
+    
+    This class integrates PubMed's Entrez API, Europe PMC, and CrossRef to facilitate systematic literature retrieval, 
+    citation analysis, and document processing.
     """
 
     def __init__(self, search_string=None, df=None, email=""):
@@ -110,6 +123,32 @@ class PubMedSearcher:
         self.df = pd.concat([self.df, records_df], ignore_index=True)
 
     def download_articles(self, allow_scihub=True, download_directory="pdf_downloads", max_articles=None):
+        """
+        Downloads full-text PDFs for articles in the DataFrame, prioritizing open-access sources.
+
+        Parameters:
+        - allow_scihub (bool, optional): Whether to attempt Sci-Hub as a fallback source if open access is unavailable. Defaults to True.
+        - download_directory (str, optional): Directory where downloaded PDFs will be stored. Defaults to "pdf_downloads".
+        - max_articles (int, optional): Maximum number of articles to download in a single execution. If None, all available articles will be processed.
+
+        Process:
+        1. Checks if the DataFrame is populated and contains necessary columns ('pmid' and 'doi').
+        2. Initializes tracking columns ('download_complete' and 'pdf_filepath') if they do not exist.
+        3. Iterates through articles, skipping those already marked as 'complete' or 'unavailable'.
+        4. Attempts to retrieve the full-text PDF using the PaperRetriever class.
+        5. Updates the DataFrame:
+           - If the PDF is successfully downloaded, stores the file path and marks the download as 'complete'.
+           - If unavailable, marks it as 'unavailable'.
+        6. Saves progress after each successful download.
+
+        Returns:
+        - self: Returns the updated PubMedSearcher instance with the download status updated.
+
+        Notes:
+        - Sci-Hub should only be enabled if legally permissible in your jurisdiction.
+        - Articles with missing or invalid DOIs are automatically skipped.
+        - Uses tqdm for progress tracking.
+        """
         if self.df.empty:
             print("DataFrame is empty.")
             return
@@ -221,85 +260,88 @@ class PubMedSearcher:
 
     def fetch_references(self):
         """
-        Fetches references for each article in the DataFrame using the find_references method.
+        Fetches references for each article in the DataFrame using the ReferenceRetriever class.
 
-        The find_references method will attempt to fetch references in the following order:
-        1. PubMed
-        2. PMC
-        3. Europe PMC
-        4. CrossRef
-        If no references are found using these methods, it will return "Not found".
+        Process:
+        1. Checks if the DataFrame is populated and contains the necessary identifiers ('doi' or 'pmid').
+        2. Iterates through articles, skipping those that already have references.
+        3. Uses ReferenceRetriever to fetch references based on DOI or PMID.
+        4. Updates the DataFrame with retrieved references.
+        5. Saves progress after processing each article.
+
+        Returns:
+        - self: The updated PubMedSearcher instance with references added.
+
+        Notes:
+        - Prioritizes DOI-based retrieval when available.
+        - Uses multiple sources (PubMed, PMC, Europe PMC, CrossRef).
+        - References are stored as lists of dictionaries in the 'references' column.
         """
-        if not hasattr(self, 'df') or self.df.empty:
-            print("DataFrame does not exist or is empty.")
+        if self.df.empty:
+            print("DataFrame is empty. No articles to fetch references for.")
             return
-        
+
         if 'references' not in self.df.columns:
             self.df['references'] = None
-        
+
         for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Fetching References"):
-            if pd.isna(row['references']):
-                references = self._find_references_for_row(row)
-                if not references:  # If references list is empty or None
-                    references = "Not found"
-                self.df.at[index, 'references'] = references
-
-    def standardize_references(self):
-        """
-        Standardizes the references column in the DataFrame to only contain the following keys:
-        ['doi', 'pmid', 'pmcid', 'title', 'authors']
-        Populates a new column 'references_standardized' with the standardized references (list of dicts)
-        """
-        def standardize_references_for_row(references):
-            standard_keys = ['doi', 'pmid', 'pmcid', 'title', 'authors']
-            return [
-                {key: ref.get(key, None) for key in standard_keys}
-                for ref in references
-                if isinstance(ref, dict)
-            ]
-
-        if 'references' not in self.df.columns:
-            print('Error: No references column found in DataFrame.')
-            return
-
-        if 'references_standardized' not in self.df.columns:
-            self.df['references_standardized'] = None
-
-        for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Standardizing references"):
-            ref_standardized = row['references_standardized']
-            if pd.notna(ref_standardized) and (isinstance(ref_standardized, (list, np.ndarray)) and len(ref_standardized) > 0):
+            if pd.notna(row['references']):  # Skip if references already exist
                 continue
             
-            references = row['references']
-            if isinstance(references, list) and not references:
-                continue
-            if isinstance(references, np.ndarray) and references.size == 0:
-                continue
-            if not isinstance(references, (list, np.ndarray)) and pd.isna(references):
-                continue
+            # Initialize ReferenceRetriever with available identifiers
+            retriever = ReferenceRetriever(email=self.email, doi=row.get('doi'), pmid=row.get('pmid'), standardize=True)
+            references = retriever.fetch_references()
+            
+            # Store references or mark as "Not found" if empty
+            self.df.at[index, 'references'] = references if references else "Not found"
 
-            self.df.at[index, 'references_standardized'] = standardize_references_for_row(references)
+            # Save progress after each update
+            self.save()
+
+        return self
 
     def fetch_cited_by(self):
         """
-        Fetches list of articles that cite each article in the DataFrame using Europe PMC.
-        Currently only works for articles with a record in Europe PMC.
+        Fetches articles that cite each article in the DataFrame using ReferenceRetriever.
+
+        Process:
+        1. Ensures the DataFrame contains necessary identifiers ('pmid' or 'doi').
+        2. Iterates through each article, skipping those that already have citing articles.
+        3. Uses ReferenceRetriever to fetch citing articles from Europe PMC and PubMed.
+        4. Updates the DataFrame with citing article information.
+        5. Saves progress after processing each article.
+
+        Returns:
+        - self: The updated PubMedSearcher instance with citing articles added.
+
+        Notes:
+        - Citing articles are retrieved from Europe PMC (default) and PubMed if available.
+        - Works best for articles with an existing record in Europe PMC.
         """
-        if not hasattr(self, 'df') or self.df.empty:
-            print("DataFrame does not exist or is empty.")
+        if self.df.empty:
+            print("DataFrame is empty. No articles to fetch cited-by data for.")
             return
-        
+
         if 'cited_by' not in self.df.columns:
             self.df['cited_by'] = None
-        
-        for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Fetching Cited By"):
-            if pd.notna(row['cited_by']):
-                continue
-            if pd.notna(row.get('is_oa')) and row.get('is_oa') and pd.notna(row.get('europe_pmc_url')):
-                cited_by = self.get_citing_articles_europe(row.get('pmid'))
-                self.df.at[index, 'cited_by'] = cited_by
 
-    def fetch_abstracts(self, save_progress=True):
+        for index, row in tqdm(self.df.iterrows(), total=self.df.shape[0], desc="Fetching Cited By"):
+            if pd.notna(row['cited_by']):  # Skip if already populated
+                continue
+            
+            # Initialize ReferenceRetriever with available identifiers
+            retriever = ReferenceRetriever(email=self.email, doi=row.get('doi'), pmid=row.get('pmid'))
+            cited_by = retriever.fetch_cited_by()  # Now uses both Europe PMC & PubMed
+            
+            # Store citing articles or mark as "Not found" if empty
+            self.df.at[index, 'cited_by'] = cited_by if cited_by else "Not found"
+
+            # Save progress after each update
+            self.save()
+
+        return self
+
+    def fetch_abstracts(self):
         """
         Fetches abstracts for each article in the DataFrame using the Entrez API.
         Unnecessary if you used the 'search' method to retrieve articles, as abstracts are already included.
@@ -319,8 +361,7 @@ class PubMedSearcher:
                 abstract = self.get_abstract(pmid)
                 self.df.at[index, 'abstract'] = abstract
             
-            if save_progress:
-                self.save()
+            self.save()
     
     def get_abstract(self, pmid):
         """Fetches the abstract for an article identified by its PMID using the Entrez API."""
@@ -388,201 +429,6 @@ class PubMedSearcher:
         """Saves a DataFrame containing only the 'pmid' and 'abstract' columns to a CSV file."""
         abstracts_df = self.df[['pmid','abstract']].copy()
         abstracts_df.to_csv(filename, index=False)
-
-    def get_references_europe(self, pmid):
-        """
-        Fetches references for an article identified by its PMID from Europe PMC API (hits the MEDLINE database).
-        """
-    
-        url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/MED/{pmid}/references?page=1&pageSize=1000&format=json"
-
-        try:
-            response = requests.get(url)
-            if response.status_code == 200:
-                data = response.json()
-                data =  data.get('referenceList', [])
-                if data:
-                    parsed_data = data.get('reference', [])
-                    if "id" in parsed_data:
-                        parsed_data["pmid"] = parsed_data.pop("id")
-                    if "authorString" in data:
-                        parsed_data["authors"] = parsed_data.pop("authorString")
-                return parsed_data.get('reference', []) if data else []
-            else:
-                # print(f"Failed to fetch references. Status code: {response.status_code}")
-                return None
-        except Exception as e:
-            # print(f"Exception occurred while fetching references: {e}")
-            return None
-        
-    def get_references_entrez_pmc(self, pmcid):
-        """Finds references for a given PMCID using Entrez API.
-        Seems to return identical results to the get_references_pubmed_oa_subset method.
-        """
-        Entrez.email = self.email
-        handle = Entrez.efetch(db="pmc", id=pmcid, retmode="xml")
-        xml_data = handle.read()
-        handle.close()
-        references = self._parse_pubmed_references(xml_data)
-        return references
-        
-    def get_references_pubmed_oa_subset(self, pmcid):
-        xml_content = self._get_xml_for_pmcid(pmcid)
-        if xml_content:
-            references = self._parse_pubmed_references(xml_content)
-            return references
-        else:
-            return None
-        
-    def get_references_entrez_pubmed(self, pmid):
-        """
-        Returns a list of PMCIDs for the references of a given pmid. 
-        Doesn't seem to work for all PMIDs, so use with caution.
-        """
-        Entrez.email = self.email
-        handle = Entrez.efetch(db="pubmed", id=pmid, retmode="xml")
-        article_details = Entrez.read(handle)
-        handle.close()
-
-        if article_details['PubmedArticle'][0]['PubmedData']['ReferenceList'] and len(article_details['PubmedArticle'][0]['PubmedData']['ReferenceList']) > 0:
-            references = []
-            try:
-                # Attempt to navigate to the ReferenceList
-                result_list = article_details['PubmedArticle'][0]['PubmedData']['ReferenceList'][0]['Reference']
-                authors_pattern = r"^(.*?)\s+et al\."
-                doi_pattern = r"doi\s*:\s*([^\s.]+)\.?"
-                doi_pattern2 = r"doi\.org/([^\s,;]+)"
-                doi_pattern3 = r"doi\.wiley\.org/([^\s,;]+)"
-
-                for ref in result_list:
-                    article_id_list = ref.get('ArticleIdList', [])
-                    citation = ref.get('Citation', '')
-                    ref_dict = {'citation': citation}
-
-                    if article_id_list:
-                        for element in article_id_list:
-                            value = str(element)
-                            id_type = element.attributes['IdType']
-                            ref_dict[id_type] = value
-
-                    if 'doi' not in ref_dict:
-                        match = re.search(doi_pattern, citation, re.IGNORECASE)
-                        if match:
-                            ref_dict['doi'] = match.group(1)
-                        elif 'doi' not in ref_dict:
-                            match2 = re.search(doi_pattern2, citation, re.IGNORECASE)
-                            if match2:
-                                ref_dict['doi'] = match2.group(1)
-                        else:
-                            match3 = re.search(doi_pattern3, citation, re.IGNORECASE)
-                            if match3:
-                                ref_dict['doi'] = match3.group(1)
-
-                    authors_match = re.search(authors_pattern, citation, re.IGNORECASE)
-                    if authors_match:
-                        ref_dict['authors'] = authors_match.group(1)
-
-                    if 'pubmed' in ref_dict:
-                        ref_dict['pmid'] = ref_dict.pop('pubmed')
-                    if 'pmc' in ref_dict:
-                        ref_dict['pmcid'] = ref_dict.pop('pmc')
-                    
-                    references.append(ref_dict)
-                return references
-
-            except (KeyError, IndexError, TypeError) as e:
-                print(f"Error navigating article details: {e}")
-                return None
-        return None
-        
-    def get_references_crossref(self, doi):
-        """
-        Fetches references for a given DOI using the CrossRef REST API and formats them into a pandas DataFrame.
-        
-        Parameters:
-            doi (str): The DOI of the article for which to fetch references.
-            
-        Returns:
-            DataFrame: A pandas DataFrame containing the references, with each column representing a common key.
-        """
-        base_url = "https://api.crossref.org/works/"
-        full_url = f"{base_url}{doi}"
-        
-        try:
-            response = requests.get(full_url)
-            if response.status_code == 200:
-                data = response.json()
-                references = data['message'].get('reference', [])
-                if references:
-                    for reference in references:
-                        if 'DOI' in reference:
-                            reference['doi'] = reference.pop('DOI')
-                        if 'author' in reference:
-                            reference['authors'] = reference.pop('author')
-                        if 'article-title' in reference:
-                            reference['title'] = reference.pop('article-title')
-                    return references
-                else:
-                    return None
-            else:
-                print(f"Failed to fetch references, HTTP status code: {response.status_code}")
-                return None
-        except requests.exceptions.RequestException as e:
-            print(f"Request failed: {str(e)}")
-            return None
-
-    def get_citing_articles_europe(self, pmid):
-        """
-        Fetches references for an article identified by its PMID from Europe PMC.
-        Tries two different search methods and returns the results from the first successful one.
-        """
-
-        def try_restful_search(pmid):
-            url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/MED/{pmid}/citations?format=json"
-            try:
-                response = requests.get(url)
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("citationList", {}).get("citation"):
-                        parsed_data = data['citationList']
-                        for citation in parsed_data["citation"]:
-                            if "id" in citation:
-                                citation["pmid"] = citation.pop("id")
-                            if "authorString" in citation:
-                                citation["authors"] = citation.pop("authorString")
-                        return parsed_data["citation"]
-                else:
-                    print(f"Failed to fetch references. Status code: {response.status_code}")
-            except Exception as e:
-                print(f"Exception occurred while fetching references: {e}")
-            return None
-
-        def try_query_search(pmid):
-            url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/search?query=cites:{pmid}_MED&format=json"
-            try:
-                response = requests.get(url)
-                if response.status_code == 200:
-                    data = response.json()
-                    if data.get("resultList", {}).get("result"):
-                        return data
-                else:
-                    print(f"Failed to fetch references. Status code: {response.status_code}")
-            except Exception as e:
-                print(f"Exception occurred while fetching references: {e}")
-            return None
-
-        # Try the RESTful search first
-        restful_result = try_restful_search(pmid)
-        if restful_result:
-            return restful_result
-        
-        # If the RESTful search fails to provide results, try the query search
-        query_result = try_query_search(pmid)
-        if query_result:
-            return query_result
-        
-        # If both searches fail, return a message indicating no results were found
-        return "No citing articles found."
     
     def download_article_xml_europe(self, pmid, download_directory="downloads", filename_suffix=None):
         """
@@ -684,108 +530,6 @@ class PubMedSearcher:
         cols.insert(0, cols.pop(cols.index('pmid')))
         df = df[cols]
         return df
-    
-    def _find_references_for_row(self, row):
-        pmcid = row.get('pmcid', None)  # Correct usage for a pandas Series
-        pmid = row.get('pmid', None)
-        doi = row.get('doi', None)
-
-        def try_pubmed(pmid):
-            if pmid:
-                references = self.get_references_entrez_pubmed(pmid)
-                if references is not None and len(references) > 0:
-                    return references
-
-        def try_pmc(pmcid):
-            if pmcid:
-                references = self.get_references_entrez_pmc(pmcid)
-                if references is not None and len(references) > 0:
-                    return references
-                else:
-                    references = self.get_references_pubmed_oa_subset(pmcid)
-                    if references is not None and len(references) > 0:
-                        return references
-
-        def try_europe(pmid):
-            if pmid:
-                references = self.get_references_europe(pmid)
-                if references is not None and len(references) > 0:
-                    return references
-
-        def try_crossref(doi):
-            if doi:
-                references = self.get_references_crossref(doi)
-                if references is not None and len(references) > 0:
-                    return references
-
-        # Try all methods until one works
-        references = try_pubmed(pmid)
-        if references:
-            return references
-
-        references = try_pmc(pmcid)
-        if references:
-            return references
-
-        references = try_europe(pmid)
-        if references:
-            return references
-
-        references = try_crossref(doi)
-        if references:
-            return references
-
-        # Return None or an empty list if no references found
-        return []
-        
-    def _stringify_children(self, node):
-        """
-        Filters and removes possible Nones in texts and tails
-        ref: http://stackoverflow.com/questions/4624062/get-all-text-inside-a-tag-in-lxml
-        """
-        parts = (
-            [node.text]
-            + list(chain(*([c.text, c.tail] for c in node.getchildren())))
-            + [node.tail]
-        )
-        return "".join(filter(None, parts))
-
-    def _parse_article_meta(self, tree):
-        """
-        Parse PMID, PMC and DOI from given article tree
-        """
-        article_meta = tree.find(".//article-meta")
-        if article_meta is not None:
-            pmid_node = article_meta.find('article-id[@pub-id-type="pmid"]')
-            pmc_node = article_meta.find('article-id[@pub-id-type="pmc"]')
-            pub_id_node = article_meta.find('article-id[@pub-id-type="publisher-id"]')
-            doi_node = article_meta.find('article-id[@pub-id-type="doi"]')
-        else:
-            pmid_node = None
-            pmc_node = None
-            pub_id_node = None
-            doi_node = None
-
-        pmid = pmid_node.text if pmid_node is not None else ""
-        pmc = pmc_node.text if pmc_node is not None else ""
-        pub_id = pub_id_node.text if pub_id_node is not None else ""
-        doi = doi_node.text if doi_node is not None else ""
-
-        dict_article_meta = {"pmid": pmid, "pmc": pmc, "doi": doi, "publisher_id": pub_id}
-
-        return dict_article_meta
-
-    def _remove_namespace(self, tree):
-        """
-        Strip namespace from parsed XML
-        """
-        for node in tree.iter():
-            try:
-                has_namespace = node.tag.startswith("{")
-            except AttributeError:
-                continue  # node.tag is not a string (node is a comment or similar)
-            if has_namespace:
-                node.tag = node.tag.split("}", 1)[1]
 
     def _get_xml_for_pmcid(self, pmcid):
         """
@@ -808,70 +552,4 @@ class PubMedSearcher:
         else:
             print("Error:", response.status_code)
             return None
-        
-    def _parse_pubmed_references(self, xml_content):
-        """
-        Parse reference articles from XML content to list of dictionaries, 
-        independent of namespace.
-        
-        Parameters
-        ----------
-        xml_content: bytes
-            XML content as bytes.
-        
-        Returns
-        -------
-        DataFrame
-            A DataFrame containing references made in the given XML.
-        """
-        
-        tree = etree.fromstring(xml_content)
-        self._remove_namespace(tree)
-        dict_article_meta = self._parse_article_meta(tree)
-        pmid = dict_article_meta["pmid"]
-        pmc = dict_article_meta["pmc"]
-        references = tree.xpath(".//ref-list/ref")
-        dict_refs = []
-
-        for reference in references:
-            ref_id = reference.attrib.get("id")
-            ref_type = reference.xpath(".//citation/@citation-type")
-            journal_type = ref_type[0] if ref_type else ""
-
-            # Extract names
-            names = reference.xpath(".//person-group[@person-group-type='author']/name/surname/text()") + \
-                    reference.xpath(".//person-group[@person-group-type='author']/name/given-names/text()")
-            names = [" ".join(names[i:i+2]) for i in range(0, len(names), 2)]
-            
-            # Extract article title, source, year, DOI, PMID
-            article_title = reference.xpath(".//article-title/text()")
-            article_title = article_title[0].replace("\n", " ").strip() if article_title else ""
-            
-            journal = reference.xpath(".//source/text()")
-            journal = journal[0] if journal else ""
-            
-            year = reference.xpath(".//year/text()")
-            year = year[0] if year else ""
-            
-            doi_cited = reference.xpath(".//pub-id[@pub-id-type='doi']/text()")
-            doi_cited = doi_cited[0] if doi_cited else ""
-            
-            pmid_cited = reference.xpath(".//pub-id[@pub-id-type='pmid']/text()")
-            pmid_cited = pmid_cited[0] if pmid_cited else ""
-            
-            dict_ref = {
-                "pmid": pmid,
-                "pmc": pmc,
-                "ref_id": ref_id,
-                "pmid_cited": pmid_cited,
-                "doi_cited": doi_cited,
-                "title": article_title,
-                "authors": "; ".join(names),
-                "year": year,
-                "journal": journal,
-                "journal_type": journal_type,
-            }
-            
-            dict_refs.append(dict_ref)
-            
-        return dict_refs
+    

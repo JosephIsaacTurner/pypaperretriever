@@ -11,7 +11,7 @@ class ReferenceRetriever:
     Fetches data from multiple sources including PubMed, Europe PMC, and CrossRef.
     """
     
-    def __init__(self, email, doi=None, pmid=None):
+    def __init__(self, email, doi=None, pmid=None, standardize=True):
         """
         Initialize the retriever with either DOI or PMID.
 
@@ -23,6 +23,7 @@ class ReferenceRetriever:
         self.email = email
         self.doi = doi
         self.pmid = pmid
+        self.standardize = standardize
 
         print(f"[ReferenceRetriever] Initializing with DOI: {doi} and PMID: {pmid}")
 
@@ -141,6 +142,8 @@ class ReferenceRetriever:
                 references.extend(refs)
         
         print(f"[ReferenceRetriever] Total references found: {len(references)}")
+        if self.standardize:
+            return self._standardize_references(references)
         return references
 
     def _find_cited_by(self):
@@ -517,3 +520,24 @@ class ReferenceRetriever:
                 formatted_authors.append(f"{author['family']} {author['given']}")
         print(f"[ReferenceRetriever] Formatted {len(formatted_authors)} CrossRef authors.")
         return ', '.join(formatted_authors)
+    
+    def _standardize_references(self, references):
+        """
+        Standardizes reference metadata to match the required format.
+
+        Parameters:
+            references (list): List of raw reference dictionaries.
+
+        Returns:
+            list: List of standardized reference dictionaries.
+        """
+        standard_keys = ['doi', 'pmid', 'pmcid', 'title', 'authors']
+        standardized_refs = []
+
+        for ref in references:
+            if isinstance(ref, dict):
+                standardized_ref = {key: ref.get(key, None) for key in standard_keys}
+                standardized_refs.append(standardized_ref)
+
+        print(f"[ReferenceRetriever] Standardized {len(standardized_refs)} references.")
+        return standardized_refs
