@@ -9,14 +9,14 @@ PyPaperRetriever is a Python tool designed to simplify the process of finding an
 
 ### Core Features
 
-<img src="pypaperretriever_figure_v1.svg" alt="PyPaperRetriever Figure 1" width="500"/>
+<img src="figure1.svg" alt="PyPaperRetriever Figure 1" width="500"/>
 
 *Figure 1: PyPaperRetriever paper retrieval workflow.*
 
 
 **1. Find and Download PDFs for a Given DOI or PubMed ID:** PyPaperRetriever can find and download PDFs for a given DOI or PubMed ID by querying multiple APIs, including Unpaywall, NIH's Entrez, CrossRef, and Sci-Hub. If a PDF is found, PyPaperRetriever will download it to the user's system. Sci-Hub is used as a last resort due to its controversial nature, and users can easily disable this feature if desired.
 
-<img src="pypaperretriever_figure2_v1.svg" alt="PyPaperRetriever Figure 2" width="500"/>
+<img src="figure2.svg" alt="PyPaperRetriever Figure 2" width="500"/>
 
 *Figure 2: PubMedSearcher workflow for searching PubMed programmatically.*
 
