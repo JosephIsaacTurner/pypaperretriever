@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE eSearchResult PUBLIC "-//NLM//DTD esearch 20060628//EN" "https://eutils.ncbi.nlm.nih.gov/eutils/dtd/20060628/esearch.dtd">
+<eSearchResult><Count>428</Count><RetMax>3</RetMax><RetStart>0</RetStart><IdList>
+<Id>39868069</Id>
+<Id>39691007</Id>
+<Id>39389294</Id>
+</IdList><TranslationSet><Translation>     <From>brain</From>     <To>"brain"[MeSH Terms] OR "brain"[All Fields] OR "brains"[All Fields] OR "brain's"[All Fields]</To>    </Translation><Translation>     <From>lesions</From>     <To>"lesion"[All Fields] OR "lesion's"[All Fields] OR "lesional"[All Fields] OR "lesions"[All Fields]</To>    </Translation><Translation>     <From>amnesia</From>     <To>"amnesia"[MeSH Terms] OR "amnesia"[All Fields] OR "amnesias"[All Fields]</To>    </Translation><Translation>     <From>case report</From>     <To>"case reports"[Publication Type] OR "case report"[All Fields]</To>    </Translation></TranslationSet><QueryTranslation>("brain"[MeSH Terms] OR "brain"[All Fields] OR "brains"[All Fields] OR "brain s"[All Fields]) AND ("lesion"[All Fields] OR "lesion s"[All Fields] OR "lesional"[All Fields] OR "lesions"[All Fields]) AND ("amnesia"[MeSH Terms] OR "amnesia"[All Fields] OR "amnesias"[All Fields]) AND ("case reports"[Publication Type] OR "case report"[All Fields]) AND "case reports"[Publication Type]</QueryTranslation></eSearchResult>
