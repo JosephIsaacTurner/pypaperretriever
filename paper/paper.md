@@ -29,7 +29,6 @@ PyPaperRetriever is a Python tool designed to simplify the process of finding an
 
 ![PyPaperRetriever paper retrieval workflow.\label{fig:workflow}](figure1.png)
 
-
 **1. Find and Download PDFs for a Given DOI or PubMed ID:** PyPaperRetriever can find and download PDFs for a given DOI or PubMed ID by querying multiple APIs, including Unpaywall, NIH's Entrez, CrossRef, and Sci-Hub. If a PDF is found, PyPaperRetriever will download it to the user's system. Sci-Hub is used as a last resort due to its controversial nature, and users can easily disable this feature if desired.
 
 ![PubMedSearcher workflow for searching PubMed programmatically.\label{fig:pubmed}](figure2.png)
@@ -70,17 +69,13 @@ Several tools exist for finding and downloading scientific literature, but PyPap
 
 **1. PyPaperBot**
 
-PyPaperBot, while functional, has significant limitations that prompted the development of PyPaperRetriever. PyPaperBot relies exclusively on Sci-Hub, which is ethically controversial and often blocked by academic institutions and in certain countries. Additionally, it lacks support for PubMed ID-based searches, a critical feature for researchers in biomedical sciences. PyPaperRetriever addresses these shortcomings by:
+PyPaperBot [@pypaperbot], while functional, has significant limitations that prompted the development of PyPaperRetriever. PyPaperBot relies exclusively on Sci-Hub, which is ethically controversial and often blocked by academic institutions and in certain countries. Additionally, it lacks support for PubMed ID-based searches, a critical feature for researchers in biomedical sciences.
 
-- Integrating with three different APIs (Unpaywall, NIH's Entrez, and CrossRef) to expand access to a wide range of sources.
-- Prioritizing open-access sources before resorting to Sci-Hub, aligning with ethical research practices.
-- Utilizing multiple Sci-Hub mirrors and robust text-scraping techniques to improve reliability when Sci-Hub is necessary.
-- Supporting PubMed ID searches and programmatic PubMed queries.
-- Enabling module-level imports for integration into Python workflows, unlike PyPaperBot’s command-line-only functionality.
+PyPaperRetriever addresses these shortcomings through several key improvements. It integrates with three different APIs (Unpaywall, NIH's Entrez, and CrossRef) to expand access to a wide range of sources, and prioritizes open-access sources before resorting to Sci-Hub. When Sci-Hub is necessary, it employs multiple mirrors and robust text-scraping techniques for improved reliability. The tool also supports PubMed ID searches and programmatic PubMed queries, while enabling module-level imports for integration into Python workflows, unlike PyPaperBot's command-line-only functionality.
 
-**2. Proprietary Software (e.g., DistillerSR, Convidence)**
+**2. Proprietary Software**
 
-There are several proprietary software tools for managing scientific literature, but they often come with high costs and limited flexibility. PyPaperRetriever offers a free, open-source alternative with comparable functionality. Additionally, PyPaperRetriever's modular design allows users to customize and extend its capabilities, making it a versatile and cost-effective solution for researchers.
+There are several proprietary software tools for managing scientific literature, including DistillerSR and Convidence. These often come with high costs and limited flexibility. PyPaperRetriever offers a free, open-source alternative with comparable functionality.
 
 # Availability
 
