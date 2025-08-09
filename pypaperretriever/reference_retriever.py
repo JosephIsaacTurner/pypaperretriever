@@ -1,6 +1,7 @@
 import requests
 from Bio import Entrez
 import re
+from typing import List, Dict, Any, Optional
 
 from .utils import doi_to_pmid
 
@@ -11,7 +12,13 @@ class ReferenceRetriever:
     Fetches data from multiple sources including PubMed, Europe PMC, and CrossRef.
     """
     
-    def __init__(self, email, doi=None, pmid=None, standardize=True):
+    def __init__(
+        self,
+        email: str,
+        doi: Optional[str] = None,
+        pmid: Optional[str] = None,
+        standardize: bool = True,
+    ) -> None:
         """
         Initialize the retriever with either DOI or PMID.
 
@@ -32,12 +39,12 @@ class ReferenceRetriever:
             self.pmid = doi_to_pmid(self.doi, self.email)
             print(f"[ReferenceRetriever] Converted DOI {self.doi} to PMID: {self.pmid}")
 
-    def fetch_references(self):
+    def fetch_references(self) -> List[Dict[str, Any]]:
         """
         Fetch references for the given DOI or PMID using multiple sources.
 
         Returns:
-            list: List of dictionaries containing reference metadata. Empty list if none found.
+            List[Dict[str, Any]]: List of dictionaries containing reference metadata. Empty list if none found.
 
         Raises:
             ValueError: If neither DOI nor PMID is provided.
@@ -53,12 +60,12 @@ class ReferenceRetriever:
         print(f"[ReferenceRetriever] Found {len(references)} references.")
         return references
 
-    def fetch_cited_by(self):
+    def fetch_cited_by(self) -> List[Dict[str, Any]]:
         """
         Fetch articles that cite the given DOI or PMID.
 
         Returns:
-            list: List of dictionaries containing citing article metadata. Empty list if none found.
+            List[Dict[str, Any]]: List of dictionaries containing citing article metadata. Empty list if none found.
 
         Raises:
             ValueError: If PMID conversion fails or is not provided.
@@ -81,12 +88,12 @@ class ReferenceRetriever:
         print(f"[ReferenceRetriever] Found {len(cited_by)} citing articles.")
         return cited_by
 
-    def get_paper_metadata(self):
+    def get_paper_metadata(self) -> Dict[str, Any]:
         """
         Fetch metadata for the paper identified by DOI or PMID.
 
         Returns:
-            dict: Paper metadata including DOI, PMID, title, authors, and year. Empty dict if not found.
+            Dict[str, Any]: Paper metadata including DOI, PMID, title, authors, and year. Empty dict if not found.
         """
         print(f"[ReferenceRetriever] Fetching metadata for DOI: {self.doi}, PMID: {self.pmid}")
         if self.pmid:
@@ -112,12 +119,12 @@ class ReferenceRetriever:
                 print(f"[ReferenceRetriever] Unable to convert DOI {self.doi} to PMID.")
         return {}
 
-    def _find_references(self):
+    def _find_references(self) -> List[Dict[str, Any]]:
         """
         Find references using multiple sources (PubMed, Europe PMC, CrossRef).
 
         Returns:
-            list: Combined list of references from all sources.
+            List[Dict[str, Any]]: Combined list of references from all sources.
         """
         print("[ReferenceRetriever] Finding references using multiple sources.")
         references = []
@@ -146,12 +153,12 @@ class ReferenceRetriever:
             return self._standardize_references(references)
         return references
 
-    def _find_cited_by(self):
+    def _find_cited_by(self) -> List[Dict[str, Any]]:
         """
         Find citing articles using multiple sources (PubMed, Europe PMC).
 
         Returns:
-            list: Combined list of citing articles from all sources.
+            List[Dict[str, Any]]: Combined list of citing articles from all sources.
         """
         print("[ReferenceRetriever] Finding citing articles using multiple sources.")
         cited_by = []
@@ -170,7 +177,7 @@ class ReferenceRetriever:
         print(f"[ReferenceRetriever] Total citing articles found: {len(cited_by)}")
         return cited_by
 
-    def get_references_europe(self, pmid):
+    def get_references_europe(self, pmid: str) -> List[Dict[str, Any]]:
         """
         Fetch references from Europe PMC API.
 
@@ -178,7 +185,7 @@ class ReferenceRetriever:
             pmid (str): PubMed ID to fetch references for
 
         Returns:
-            list: References found in Europe PMC. Empty list if none found or on error.
+            List[Dict[str, Any]]: References found in Europe PMC. Empty list if none found or on error.
         """
         url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/MED/{pmid}/references?page=1&pageSize=1000&format=json"
         print(f"[ReferenceRetriever] Requesting Europe PMC references from URL: {url}")
@@ -196,7 +203,7 @@ class ReferenceRetriever:
             print(f"[ReferenceRetriever] Error fetching references from Europe PMC for PMID {pmid}: {e}")
             return []
 
-    def get_references_entrez_pubmed(self, pmid):
+    def get_references_entrez_pubmed(self, pmid: str) -> List[Dict[str, Any]]:
         """
         Fetch references from PubMed using Entrez.
 
@@ -204,7 +211,7 @@ class ReferenceRetriever:
             pmid (str): PubMed ID to fetch references for
 
         Returns:
-            list: References found in PubMed. Empty list if none found or on error.
+            List[Dict[str, Any]]: References found in PubMed. Empty list if none found or on error.
         """
         Entrez.email = self.email
         print(f"[ReferenceRetriever] Requesting Entrez PubMed references for PMID: {pmid}")
@@ -227,7 +234,7 @@ class ReferenceRetriever:
             print(f"[ReferenceRetriever] Error fetching references from PubMed for PMID {pmid}: {e}")
             return []
 
-    def get_references_crossref(self, doi):
+    def get_references_crossref(self, doi: str) -> List[Dict[str, Any]]:
         """
         Fetch references from CrossRef API.
 
@@ -235,7 +242,7 @@ class ReferenceRetriever:
             doi (str): DOI to fetch references for
 
         Returns:
-            list: References found in CrossRef. Empty list if none found or on error.
+            List[Dict[str, Any]]: References found in CrossRef. Empty list if none found or on error.
         """
         url = f"https://api.crossref.org/works/{doi}"
         print(f"[ReferenceRetriever] Requesting CrossRef references from URL: {url}")
@@ -253,7 +260,7 @@ class ReferenceRetriever:
             print(f"[ReferenceRetriever] Error fetching references from CrossRef for DOI {doi}: {e}")
             return []
 
-    def get_citing_articles_europe(self, pmid):
+    def get_citing_articles_europe(self, pmid: str) -> List[Dict[str, Any]]:
         """
         Fetch citing articles from Europe PMC API.
 
@@ -261,7 +268,7 @@ class ReferenceRetriever:
             pmid (str): PubMed ID to fetch citations for
 
         Returns:
-            list: Citing articles found in Europe PMC. Empty list if none found or on error.
+            List[Dict[str, Any]]: Citing articles found in Europe PMC. Empty list if none found or on error.
         """
         url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/MED/{pmid}/citations?format=json"
         print(f"[ReferenceRetriever] Requesting Europe PMC citing articles from URL: {url}")
@@ -279,7 +286,7 @@ class ReferenceRetriever:
             print(f"[ReferenceRetriever] Error fetching citing articles from Europe PMC for PMID {pmid}: {e}")
             return []
 
-    def get_citing_articles_pubmed(self, pmid):
+    def get_citing_articles_pubmed(self, pmid: str) -> List[Dict[str, Any]]:
         """
         Fetch citing articles from PubMed using Entrez.
 
@@ -287,7 +294,7 @@ class ReferenceRetriever:
             pmid (str): PubMed ID to fetch citations for
 
         Returns:
-            list: Citing articles found in PubMed. Empty list if none found or on error.
+            List[Dict[str, Any]]: Citing articles found in PubMed. Empty list if none found or on error.
         """
         Entrez.email = self.email
         print(f"[ReferenceRetriever] Requesting PubMed citing articles for PMID: {pmid}")
@@ -310,7 +317,7 @@ class ReferenceRetriever:
             print(f"[ReferenceRetriever] Error fetching citing articles from PubMed for PMID {pmid}: {e}")
             return []
 
-    def _fetch_articles_details(self, pmids):
+    def _fetch_articles_details(self, pmids: List[str]) -> List[Dict[str, Any]]:
         """
         Fetch detailed metadata for multiple PMIDs from PubMed.
 
@@ -318,7 +325,7 @@ class ReferenceRetriever:
             pmids (list): List of PubMed IDs to fetch details for
 
         Returns:
-            list: Article details for each PMID. Empty list if none found or on error.
+            List[Dict[str, Any]]: Article details for each PMID. Empty list if none found or on error.
         """
         Entrez.email = self.email
         pmid_string = ",".join(pmids)
@@ -335,13 +342,13 @@ class ReferenceRetriever:
             return []
 
 
-    def _parse_europe_references(self, references):
+    def _parse_europe_references(self, references: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Parses a list of references from Europe PMC and extracts relevant information.
         Args:
             references (list): A list of reference dictionaries obtained from Europe PMC.
         Returns:
-            list: A list of dictionaries, where each dictionary contains parsed
+            List[Dict[str, Any]]: A list of dictionaries, where each dictionary contains parsed
                     information about a single reference, including authors, title,
                     journal, year, and DOI.
         """
@@ -360,7 +367,7 @@ class ReferenceRetriever:
         print(f"[ReferenceRetriever] Parsed {len(parsed_references)} Europe PMC references.")
         return parsed_references
 
-    def _parse_pubmed_references(self, references):
+    def _parse_pubmed_references(self, references: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Parses a list of PubMed references and extracts relevant information.
         This method processes a list of references obtained from Entrez PubMed,
@@ -370,7 +377,7 @@ class ReferenceRetriever:
             references (list): A list of reference dictionaries, where each dictionary
                                contains information about a single reference.
         Returns:
-            list: A list of dictionaries, where each dictionary contains parsed
+            List[Dict[str, Any]]: A list of dictionaries, where each dictionary contains parsed
                   information about a single reference, including citation, DOI,
                   authors, PMID, and PMCID if available.
         """
@@ -408,13 +415,13 @@ class ReferenceRetriever:
         print(f"[ReferenceRetriever] Parsed {len(parsed_references)} Entrez PubMed references.")
         return parsed_references
 
-    def _parse_crossref_references(self, references):
+    def _parse_crossref_references(self, references: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
         Parses a list of references from CrossRef and extracts relevant information.
         Args:  
             references (list): A list of reference dictionaries obtained from CrossRef.
         Returns:
-            list: A list of dictionaries, where each dictionary contains parsed
+            List[Dict[str, Any]]: A list of dictionaries, where each dictionary contains parsed
                     information about a single reference, including authors, title,
                     journal, year, and DOI.
         """
@@ -432,13 +439,13 @@ class ReferenceRetriever:
         print(f"[ReferenceRetriever] Parsed {len(parsed_references)} CrossRef references.")
         return parsed_references
 
-    def _parse_pubmed_articles(self, records):
+    def _parse_pubmed_articles(self, records: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
         Parses a list of PubMed articles and extracts relevant information.
         Args:
             records (dict): A dictionary containing PubMed articles data.
-        Returns:    
-            list: A list of dictionaries, where each dictionary contains parsed
+        Returns:
+            List[Dict[str, Any]]: A list of dictionaries, where each dictionary contains parsed
                     information about a single article, including authors, title,
                     journal, year, and DOI.
         """
@@ -460,7 +467,7 @@ class ReferenceRetriever:
         print(f"[ReferenceRetriever] Parsed details for {len(parsed_articles)} PubMed articles.")
         return parsed_articles
 
-    def _get_author_list(self, authors):
+    def _get_author_list(self, authors: List[Dict[str, Any]]) -> str:
         """
         Generate a comma-separated list of author names.
         Args:
@@ -476,7 +483,7 @@ class ReferenceRetriever:
                 author_list.append(name)
         return ', '.join(author_list)
 
-    def _get_pub_date_year(self, pub_date):
+    def _get_pub_date_year(self, pub_date: Dict[str, Any]) -> str:
         """
         Extract the year from the publication date data.
         """
@@ -489,9 +496,15 @@ class ReferenceRetriever:
                 return match.group(0)
         return ''
 
-    def _parse_europe_cited_by(self, cited_by):
+    def _parse_europe_cited_by(self, cited_by: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Parses a list of citing articles from Europe PMC and extracts relevant information.
+        Parse citing articles from Europe PMC and extract relevant information.
+
+        Args:
+            cited_by (List[Dict[str, Any]]): Raw citing article data from Europe PMC.
+
+        Returns:
+            List[Dict[str, Any]]: Parsed citing article metadata.
         """
         print("[ReferenceRetriever] Parsing Europe PMC citing articles.")
         parsed_citations = []
@@ -508,9 +521,15 @@ class ReferenceRetriever:
         print(f"[ReferenceRetriever] Parsed {len(parsed_citations)} Europe PMC citing articles.")
         return parsed_citations
 
-    def _format_crossref_authors(self, authors):
+    def _format_crossref_authors(self, authors: Optional[List[Dict[str, Any]]]) -> str:
         """
         Format authors list from CrossRef API response.
+
+        Args:
+            authors (Optional[List[Dict[str, Any]]]): Author entries from CrossRef.
+
+        Returns:
+            str: Comma-separated author names.
         """
         if not authors:
             return ''
@@ -521,15 +540,15 @@ class ReferenceRetriever:
         print(f"[ReferenceRetriever] Formatted {len(formatted_authors)} CrossRef authors.")
         return ', '.join(formatted_authors)
     
-    def _standardize_references(self, references):
+    def _standardize_references(self, references: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Standardizes reference metadata to match the required format.
+        Standardize reference metadata to match the required format.
 
-        Parameters:
-            references (list): List of raw reference dictionaries.
+        Args:
+            references (List[Dict[str, Any]]): List of raw reference dictionaries.
 
         Returns:
-            list: List of standardized reference dictionaries.
+            List[Dict[str, Any]]: List of standardized reference dictionaries.
         """
         standard_keys = ['doi', 'pmid', 'pmcid', 'title', 'authors']
         standardized_refs = []

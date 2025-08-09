@@ -1,4 +1,5 @@
 import pandas as pd
+from typing import List, Dict, Any, Optional
 from .reference_retriever import ReferenceRetriever
 
 class PaperTracker:
@@ -32,7 +33,14 @@ class PaperTracker:
         - parent_identifiers: List of papers that cite this paper
     """
 
-    def __init__(self, email, max_upstream_generations=1, max_downstream_generations=1, doi=None, pmid=None):
+    def __init__(
+        self,
+        email: str,
+        max_upstream_generations: int = 1,
+        max_downstream_generations: int = 1,
+        doi: Optional[str] = None,
+        pmid: Optional[str] = None,
+    ) -> None:
         """
         Initialize the PaperTracker with either a DOI or PMID.
 
@@ -64,7 +72,7 @@ class PaperTracker:
         self.processed_upstream = set()
         self.processed_downstream = set()
 
-    def go_upstream(self, doi=None, pmid=None):
+    def go_upstream(self, doi: Optional[str] = None, pmid: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Fetch references for a given paper.
 
@@ -73,13 +81,13 @@ class PaperTracker:
             pmid (str, optional): PubMed ID of the paper
 
         Returns:
-            list: List of dictionaries containing reference paper metadata
+            List[Dict[str, Any]]: List of dictionaries containing reference paper metadata
         """
         print(f"[PaperTracker] Going upstream for DOI: {doi}, PMID: {pmid}")
         retriever = ReferenceRetriever(email=self.email, doi=doi, pmid=pmid)
         return retriever.fetch_references()
 
-    def go_downstream(self, doi=None, pmid=None):
+    def go_downstream(self, doi: Optional[str] = None, pmid: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Fetch papers that cite the given paper.
 
@@ -88,13 +96,13 @@ class PaperTracker:
             pmid (str, optional): PubMed ID of the paper
 
         Returns:
-            list: List of dictionaries containing citing paper metadata
+            List[Dict[str, Any]]: List of dictionaries containing citing paper metadata
         """
         print(f"[PaperTracker] Going downstream for DOI: {doi}, PMID: {pmid}")
         retriever = ReferenceRetriever(email=self.email, doi=doi, pmid=pmid)
         return retriever.fetch_cited_by()
 
-    def track_paper(self):
+    def track_paper(self) -> pd.DataFrame:
         """
         Build the complete citation network around the root paper.
         
@@ -110,7 +118,13 @@ class PaperTracker:
         print("[PaperTracker] Tracking process completed.")
         return self.df
 
-    def _track_upstream(self, doi, pmid, generation, parent_id):
+    def _track_upstream(
+        self,
+        doi: Optional[str],
+        pmid: Optional[str],
+        generation: int,
+        parent_id: Optional[str],
+    ) -> None:
         """
         Recursively track references up to max_upstream_generations.
 
@@ -175,7 +189,13 @@ class PaperTracker:
                 self.df.at[idx[0], 'children_identifiers'] = current_children + [ref_id]
                 print(f"[PaperTracker] Updated children_identifiers for Paper ID: {paper_id}")
 
-    def _track_downstream(self, doi, pmid, generation, parent_id):
+    def _track_downstream(
+        self,
+        doi: Optional[str],
+        pmid: Optional[str],
+        generation: int,
+        parent_id: Optional[str],
+    ) -> None:
         """
         Recursively track citations up to max_downstream_generations.
 
@@ -240,7 +260,7 @@ class PaperTracker:
                 self.df.at[idx[0], 'children_identifiers'] = current_children + [cite_id]
                 print(f"[PaperTracker] Updated children_identifiers for Paper ID: {paper_id}")
 
-    def _get_paper_metadata(self, doi, pmid):
+    def _get_paper_metadata(self, doi: Optional[str], pmid: Optional[str]) -> Dict[str, Any]:
         """
         Fetch metadata for a given paper.
 
@@ -249,7 +269,7 @@ class PaperTracker:
             pmid (str): PubMed ID of the paper
 
         Returns:
-            dict: Paper metadata including doi, pmid, title, authors, and year
+            Dict[str, Any]: Paper metadata including doi, pmid, title, authors, and year
         """
         print(f"[PaperTracker] Fetching metadata for DOI: {doi}, PMID: {pmid}")
         retriever = ReferenceRetriever(email=self.email, doi=doi, pmid=pmid)
