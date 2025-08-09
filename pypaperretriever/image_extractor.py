@@ -36,7 +36,7 @@ class ImageExtractor:
         self._determine_if_valid_pdf()  # Sometimes PDFs are corrupted and cannot be opened
         if self.is_valid_pdf:
             self._check_pdf_type()
-            self._get_metdata()
+            self._get_metadata()
 
     def extract_images(self):
         """Wrapper function to extract images based on PDF type."""
@@ -149,7 +149,7 @@ class ImageExtractor:
 
         return self.img_counter
 
-    def _get_metdata(self):
+    def _get_metadata(self):
         """See if there's a matching JSON file for the PDF and extract metadata."""
         metadata_json = self.filepath.replace(".pdf", ".json")
         if os.path.exists(metadata_json):
