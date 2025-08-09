@@ -43,7 +43,7 @@ class PaperRetriever:
         _get_pdf_element(html_text, mirror): Extracts the PDF link from the HTML text of a Sci-Hub page.
     """
 
-    def __init__(self, email, doi=None, pmid=None, allow_scihub=True, download_directory='PDFs', filename=None, override_previous_attempt=False):
+    def __init__(self, email, doi=None, pmid=None, allow_scihub=False, download_directory='PDFs', filename=None, override_previous_attempt=False):
         self.email = email
         if not doi and not pmid:
             raise ValueError("Either a DOI or PMID must be provided")

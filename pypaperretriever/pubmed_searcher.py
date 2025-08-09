@@ -122,7 +122,7 @@ class PubMedSearcher:
         records_df = self._parse_records_to_df(records_xml_bytes)
         self.df = pd.concat([self.df, records_df], ignore_index=True)
 
-    def download_articles(self, allow_scihub=True, download_directory="pdf_downloads", max_articles=None):
+    def download_articles(self, allow_scihub=False, download_directory="pdf_downloads", max_articles=None):
         """
         Downloads full-text PDFs for articles in the DataFrame, prioritizing open-access sources.
 
