@@ -2,7 +2,9 @@
 
 <img src="logo.png" width="200">
 
-**A python package for retrieving scientific papers from the web.** Inspired by PyPaperBot (https://github.com/ferru97/PyPaperBot) but with improved flexibility and extensibility. Prefers open-access sources but users can opt to use Sci-Hub as a fallback depending on their ethical considerations and local laws. 
+**A python package for retrieving scientific papers from the web.** Inspired by PyPaperBot (https://github.com/ferru97/PyPaperBot) but with improved flexibility and extensibility. Prefers open-access sources but users can opt to use Sci-Hub as a fallback depending on their ethical considerations and local laws.
+
+Full documentation is available at [https://josephiturner.com/pypaperretriever/](https://josephiturner.com/pypaperretriever/).
 
 ### Installation
     

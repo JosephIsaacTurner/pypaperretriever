@@ -1,64 +1,72 @@
 # Quickstart
 
-This tutorial shows how to fetch a paper with **PyPaperRetriever** and demonstrates writing clear docstrings.
+This guide highlights common workflows of **PyPaperRetriever**.
 
-## Fetch a paper
+## Installation
 
-```python
-from pypaperretriever import Retriever
-
-retriever = Retriever()
-paper = retriever.fetch("10.1038/nature12373")
-print(paper.title)
+```bash
+pip install git+https://github.com/josephisaacturner/pypaperretriever.git
 ```
 
-## Docstring examples
+## Download a paper
+
+Download a PDF by DOI:
 
 ```python
-def calculate_sum(values):
-    """Compute the sum of numeric values.
+from pypaperretriever import PaperRetriever
 
-    Args:
-        values (Iterable[float]): Numbers to be summed. An empty iterable returns ``0``.
+retriever = PaperRetriever(
+    email="your.email@gmail.com",
+    doi="10.7759/cureus.76081",
+    download_directory="PDFs"
+)
+retriever.download()
+```
 
-    Returns:
-        float: The total of all provided values.
+To download via PubMed ID:
 
-    Raises:
-        TypeError: If any element in ``values`` is not numeric.
-    """
-    return sum(values)
+```python
+from pypaperretriever import PaperRetriever
 
+retriever = PaperRetriever(
+    email="your.email@gmail.com",
+    pmid="33813262",
+    download_directory="PDFs"
+)
+retriever.download()
+```
 
-class DataProcessor:
-    """Process and analyze numeric datasets.
+## Search PubMed and download results
 
-    Attributes:
-        scale (float): Factor applied to each element before aggregation.
-    """
+```python
+from pypaperretriever import PubMedSearcher
 
-    def __init__(self, scale: float = 1.0):
-        """Create a new processor.
+search_query = "brain lesion case reports"
+searcher = PubMedSearcher(search_string=search_query, email="your.email@gmail.com")
 
-        Args:
-            scale (float, optional): Multiplier for data values. Defaults to ``1.0``.
-        """
-        self.scale = scale
+results = searcher.search(count=5)
+searcher.download_articles(download_directory="PDFs")
+```
 
-    def process(self, data):
-        """Scale and average a sequence of numbers.
+## Extract images from PDFs
 
-        Args:
-            data (Iterable[float]): Input values to process.
+```python
+from pypaperretriever import ImageExtractor
 
-        Returns:
-            float: Mean of the scaled values.
+extractor = ImageExtractor("PDFs/10.7759_cureus.76081.pdf")
+extractor.extract_images()
+```
 
-        Raises:
-            ValueError: If ``data`` is empty.
-        """
-        if not data:
-            raise ValueError("data must contain at least one element")
-        scaled = [x * self.scale for x in data]
-        return sum(scaled) / len(scaled)
+## Track citation networks
+
+```python
+from pypaperretriever import PaperTracker
+
+tracker = PaperTracker(
+    email="your.email@gmail.com",
+    doi="10.1097/RLU.0000000000001894",
+    max_upstream_generations=1,
+    max_downstream_generations=1,
+)
+results = tracker.track_paper()
 ```
