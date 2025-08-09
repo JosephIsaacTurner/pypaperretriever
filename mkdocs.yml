@@ -1,8 +1,8 @@
 site_name: PyPaperRetriever
 site_description: Documentation for PyPaperRetriever
-site_url: https://your-username.github.io/pypaperretriever/
-repo_url: https://github.com/your-username/pypaperretriever
-repo_name: your-username/pypaperretriever
+site_url: https://josephiturner.com/pypaperretriever/
+repo_url: https://github.com/josephisaacturner/pypaperretriever
+repo_name: josephisaacturner/pypaperretriever
 
 theme:
   name: material
