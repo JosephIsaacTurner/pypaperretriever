@@ -9,6 +9,25 @@ theme:
   features:
     - navigation.expand
     - navigation.sections
+    - content.code.annotate   # inline code annotations
+    - content.code.copy       # little copy button on code blocks
+    - content.code.highlight  # automatic syntax highlighting
+    - palette.toggle          # adds a light/dark mode toggle
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
 
 plugins:
   - search
@@ -28,6 +47,13 @@ nav:
 
 extra:
   version: 0.1.0
+
 markdown_extensions:
   - admonition
-  - codehilite
+  - codehilite:
+      guess_lang: false
+  - pymdownx.highlight:
+      anchor_linenums: true
+      linenums: true
+      use_pygments: true
+  - pymdownx.superfences
