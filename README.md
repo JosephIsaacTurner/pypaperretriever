@@ -2,9 +2,13 @@
 
 <img src="logo.png" width="200">
 
-**A python package for retrieving scientific papers from the web.** Inspired by PyPaperBot (https://github.com/ferru97/PyPaperBot) but with improved flexibility and extensibility. Prefers open-access sources but users can opt to use Sci-Hub as a fallback depending on their ethical considerations and local laws.
+[![Docs](https://img.shields.io/badge/Docs-Read%20the%20docs-blue?logo=readthedocs)](https://josephiturner.com/pypaperretriever/)
+[![Quickstart](https://img.shields.io/badge/Quickstart-5%20min-brightgreen)](https://josephiturner.com/pypaperretriever/quickstart/)
 
-Full documentation is available at [https://josephiturner.com/pypaperretriever/](https://josephiturner.com/pypaperretriever/).
+👉 **[Full Documentation](https://josephiturner.com/pypaperretriever/)**  
+👉 **[Start with the Quickstart](https://josephiturner.com/pypaperretriever/quickstart/)**
+
+**A python package for retrieving scientific papers from the web.** Inspired by PyPaperBot (https://github.com/ferru97/PyPaperBot) but with improved flexibility and extensibility. Prefers open-access sources but users can opt to use Sci-Hub as a fallback depending on their ethical considerations and local laws.
 
 ### Installation
     
