@@ -1,0 +1,33 @@
+site_name: PyPaperRetriever
+site_description: Documentation for PyPaperRetriever
+site_url: https://your-username.github.io/pypaperretriever/
+repo_url: https://github.com/your-username/pypaperretriever
+repo_name: your-username/pypaperretriever
+
+theme:
+  name: material
+  features:
+    - navigation.expand
+    - navigation.sections
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: google
+            show_source: true
+
+nav:
+  - Home: index.md
+  - Installation: installation.md
+  - Quickstart: quickstart.md
+  - API Reference: api.md
+  - FAQ: faq.md
+
+extra:
+  version: 0.1.0
+markdown_extensions:
+  - admonition
+  - codehilite
