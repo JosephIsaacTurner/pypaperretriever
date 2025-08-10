@@ -9,10 +9,10 @@ theme:
   features:
     - navigation.expand
     - navigation.sections
-    - content.code.annotate   # inline code annotations
-    - content.code.copy       # little copy button on code blocks
-    - content.code.highlight  # automatic syntax highlighting
-    - palette.toggle          # adds a light/dark mode toggle
+    - content.code.annotate
+    - content.code.copy
+    - content.code.highlight
+    - palette.toggle
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
@@ -36,13 +36,30 @@ plugins:
         python:
           options:
             docstring_style: google
-            show_source: true
+            show_source: false
+            show_root_heading: true
+            show_object_full_path: false
+            separate_signature: true
+            show_signature_annotations: true
+            merge_init_into_class: true
+            members_order: source
+            filters:
+              - "!^__"     # hide dunders
+              - "!^_"      # hide private helpers
 
 nav:
   - Home: index.md
   - Installation: installation.md
   - Quickstart: quickstart.md
-  - API Reference: api.md
+  - API Reference:
+      - Overview: api/index.md
+      - PaperRetriever: api/paper_retriever.md
+      - PubMedSearcher: api/pubmed_searcher.md
+      - ImageExtractor: api/image_extractor.md
+      - ReferenceRetriever: api/reference_retriever.md
+      - PaperTracker: api/paper_tracker.md
+      - Utils: api/utils.md
+      - CLI: api/cli.md
   - FAQ: faq.md
 
 extra:

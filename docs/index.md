@@ -6,5 +6,5 @@ Use the navigation on the left to explore the docs or jump to a section below:
 
 - [Installation](installation.md)
 - [Quickstart](quickstart.md)
-- [API Reference](api.md)
+- [API Reference](api/index.md)
 - [FAQ](faq.md)

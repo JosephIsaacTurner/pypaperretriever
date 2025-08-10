@@ -445,7 +445,7 @@ def main():
     parser.add_argument('--dwn-dir', default='PDFs', help='Directory to download the PDFs into. Defaults to "PDFs".')
     parser.add_argument('--filename', help='Custom filename for the downloaded PDF.')
     parser.add_argument('--override', action='store_true', help='Override previous download attempts.')
-    parser.add_argument('--allow-scihub', choices=['true', 'false'], default='true',
+    parser.add_argument('--allow-scihub', choices=['true', 'false'], default='false',
                     help='Allow downloading from Sci-Hub if available (true/false).')
 
     args = parser.parse_args()
