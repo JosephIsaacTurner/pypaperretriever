@@ -1,61 +1,44 @@
+"""High level utilities for interacting with PubMed."""
+
+from __future__ import annotations
+
 import os
+from io import BytesIO
 
 import pandas as pd
 import requests
 from Bio import Entrez
-from io import BytesIO
 from tqdm import tqdm
+from typing import Self
 
-from .paper_retriever import PaperRetriever
 from .image_extractor import ImageExtractor
+from .paper_retriever import PaperRetriever
 from .reference_retriever import ReferenceRetriever
 
 tqdm.pandas()
 
+
 class PubMedSearcher:
-    """
-    A class to search PubMed for articles, retrieve metadata, download full texts, and process references.
+    """Search PubMed and manage retrieved articles.
+
+    Args:
+        search_string (str | None): Query used for PubMed search.
+        df (pandas.DataFrame | None): Existing table of articles.
+        email (str): Email address required by Entrez.
 
     Attributes:
-    - search_string (str): Query string for searching PubMed.
-    - df (DataFrame): Stores retrieved article metadata, references, and processing statuses.
-    - email (str): Email address required for querying PubMed via Entrez.
-
-    Core Methods:
-    - search(count, min_date, max_date, order_by, only_open_access, only_case_reports): 
-      Retrieves PubMed articles based on the search query with filtering options.
-    - fetch_abstracts(): 
-      Fetches missing abstracts from PubMed for articles in the DataFrame.
-    - download_articles(allow_scihub, download_directory, max_articles): 
-      Downloads full-text PDFs, prioritizing open access sources.
-    - extract_images(image_directory): 
-      Extracts images from downloaded PDFs and stores them.
-    - fetch_references(): 
-      Retrieves references for each article using multiple sources (PubMed, PMC, CrossRef, Europe PMC).
-    - fetch_cited_by(): 
-      Retrieves articles that cite each article using Europe PMC.
-    - download_xml_fulltext(download_directory): 
-      Downloads XML full-text versions when available (PubMed Open Access, Europe PMC).
-    - save(csv_path): 
-      Saves the DataFrame to a CSV file.
-
-    Internal Helper Methods:
-    - _validate_dataframe(df): Ensures DataFrame contains necessary columns.
-    - _parse_records_to_df(records_xml_bytes): Converts retrieved PubMed records to a DataFrame.
-    - _get_xml_for_pmcid(pmcid): Fetches full-text XML for an article using a PMCID.
-    
-    This class integrates PubMed's Entrez API, Europe PMC, and CrossRef to facilitate systematic literature retrieval, 
-    citation analysis, and document processing.
+        df (pandas.DataFrame): Table of article metadata and processing flags.
+        search_string (str | None): Stored search query.
+        email (str): Email address used for API calls.
     """
 
     def __init__(self, search_string=None, df=None, email=""):
-        """
-        Initializes the PubMedSearcher object with a search string and an optional DataFrame.
+        """Initialize the searcher.
 
-        Parameters:
-        search_string (str): The search string to use when querying PubMed.
-        df (DataFrame): An optional DataFrame that may already contain articles, previous search results, etc.
-        email (str): The email address to use when querying PubMed.
+        Args:
+            search_string (str | None): Query to submit to PubMed.
+            df (pandas.DataFrame | None): Existing table of articles.
+            email (str): Email address required by Entrez.
         """
         self.search_string = search_string
         self.df = df if df is not None else pd.DataFrame()
@@ -69,17 +52,28 @@ class PubMedSearcher:
             print("Please provide an email address to use for querying PubMed.")
             raise ValueError("Email address is required for PubMed queries.")
 
-    def search(self, count=10, min_date=None, max_date=None, order_by='chronological', only_open_access=False, only_case_reports=False):
-        """
-        Searches PubMed for articles based on the search string and retrieves the specified number of articles.
+    def search(
+        self,
+        count: int = 10,
+        min_date: int | None = None,
+        max_date: int | None = None,
+        order_by: str = "chronological",
+        only_open_access: bool = False,
+        only_case_reports: bool = False,
+    ) -> Self:
+        """Search PubMed for articles.
 
-        Parameters:
-        count (int): The number of articles to retrieve.
-        min_date (int, optional): The minimum publication year to consider.
-        max_date (int, optional): The maximum publication year to consider.
-        order_by (str, optional): The order in which to retrieve articles. Can be 'chronological' or 'relevance'. Defaults to 'chronological'.
-        only_open_access (bool, optional): Whether to retrieve only open access articles. Defaults to False.
-        only_case_reports (bool, optional): Whether to retrieve only case reports. Defaults to False.
+        Args:
+            count (int): Number of articles to retrieve.
+            min_date (int | None): Minimum publication year.
+            max_date (int | None): Maximum publication year.
+            order_by (str): ``"chronological"`` or ``"relevance"``.
+            only_open_access (bool): If ``True``, restrict to open-access articles.
+            only_case_reports (bool): If ``True``, restrict to case reports.
+
+        Returns:
+            Self: This instance.
+
         """
         if not self.search_string:
             raise ValueError("Search string is not provided")
@@ -121,40 +115,31 @@ class PubMedSearcher:
 
         records_df = self._parse_records_to_df(records_xml_bytes)
         self.df = pd.concat([self.df, records_df], ignore_index=True)
+        return self
 
-    def download_articles(self, allow_scihub=False, download_directory="pdf_downloads", max_articles=None):
-        """
-        Downloads full-text PDFs for articles in the DataFrame, prioritizing open-access sources.
+    def download_articles(
+        self,
+        allow_scihub: bool = False,
+        download_directory: str = "pdf_downloads",
+        max_articles: int | None = None,
+    ) -> Self:
+        """Download full-text PDFs for articles in ``df``.
 
-        Parameters:
-        - allow_scihub (bool, optional): Whether to attempt Sci-Hub as a fallback source if open access is unavailable. Defaults to True.
-        - download_directory (str, optional): Directory where downloaded PDFs will be stored. Defaults to "pdf_downloads".
-        - max_articles (int, optional): Maximum number of articles to download in a single execution. If None, all available articles will be processed.
-
-        Process:
-        1. Checks if the DataFrame is populated and contains necessary columns ('pmid' and 'doi').
-        2. Initializes tracking columns ('download_complete' and 'pdf_filepath') if they do not exist.
-        3. Iterates through articles, skipping those already marked as 'complete' or 'unavailable'.
-        4. Attempts to retrieve the full-text PDF using the PaperRetriever class.
-        5. Updates the DataFrame:
-           - If the PDF is successfully downloaded, stores the file path and marks the download as 'complete'.
-           - If unavailable, marks it as 'unavailable'.
-        6. Saves progress after each successful download.
+        Args:
+            allow_scihub (bool): Use Sci-Hub as a fallback source.
+            download_directory (str): Directory to store downloaded PDFs.
+            max_articles (int | None): Maximum number of articles to process.
 
         Returns:
-        - self: Returns the updated PubMedSearcher instance with the download status updated.
+            Self: The updated instance.
 
-        Notes:
-        - Sci-Hub should only be enabled if legally permissible in your jurisdiction.
-        - Articles with missing or invalid DOIs are automatically skipped.
-        - Uses tqdm for progress tracking.
         """
         if self.df.empty:
             print("DataFrame is empty.")
-            return
+            return self
         if 'pmid' not in self.df.columns or 'doi' not in self.df.columns:
-            print(f"DataFrame is missing required columns for article download (pmid and doi)")
-            return
+            print("DataFrame is missing required columns for article download (pmid and doi)")
+            return self
         if 'download_complete' not in self.df.columns:
             self.df['download_complete'] = 'not_started'
         if 'pdf_filepath' not in self.df.columns:
@@ -186,23 +171,24 @@ class PubMedSearcher:
             self.save()
         return self
     
-    def extract_images(self):
-        """
-        Extracts images from the PDFs of the articles in the DataFrame using the ImageExtractor class.
-        Only applies to successfully downloaded PDFs.
-        
-        Parameters:
-        - image_directory (str): The base directory where extracted images will be stored.
+    def extract_images(self) -> Self:
+        """Extract images from downloaded PDFs using :class:`ImageExtractor`.
+
+        Only rows marked as successfully downloaded are processed.
+
+        Returns:
+            Self: The updated instance.
+
         """
         if self.df.empty:
             print("DataFrame is empty. No articles to extract images from.")
-            return
-        
+            return self
+
         required_columns = ['download_complete', 'pdf_filepath']
         for col in required_columns:
             if col not in self.df.columns:
                 print(f"Error: DataFrame is missing required column '{col}'.")
-                return
+                return self
         
         # Initialize columns for image paths and extraction status if they don't exist
         if 'image_paths' not in self.df.columns:
@@ -249,28 +235,16 @@ class PubMedSearcher:
         print("Image extraction process completed.")
         return self
 
-    def fetch_references(self):
-        """
-        Fetches references for each article in the DataFrame using the ReferenceRetriever class.
-
-        Process:
-        1. Checks if the DataFrame is populated and contains the necessary identifiers ('doi' or 'pmid').
-        2. Iterates through articles, skipping those that already have references.
-        3. Uses ReferenceRetriever to fetch references based on DOI or PMID.
-        4. Updates the DataFrame with retrieved references.
-        5. Saves progress after processing each article.
+    def fetch_references(self) -> Self:
+        """Fetch references for each article in ``df``.
 
         Returns:
-        - self: The updated PubMedSearcher instance with references added.
+            Self: The updated instance.
 
-        Notes:
-        - Prioritizes DOI-based retrieval when available.
-        - Uses multiple sources (PubMed, PMC, Europe PMC, CrossRef).
-        - References are stored as lists of dictionaries in the 'references' column.
         """
         if self.df.empty:
             print("DataFrame is empty. No articles to fetch references for.")
-            return
+            return self
 
         if 'references' not in self.df.columns:
             self.df['references'] = None
@@ -291,27 +265,16 @@ class PubMedSearcher:
 
         return self
 
-    def fetch_cited_by(self):
-        """
-        Fetches articles that cite each article in the DataFrame using ReferenceRetriever.
-
-        Process:
-        1. Ensures the DataFrame contains necessary identifiers ('pmid' or 'doi').
-        2. Iterates through each article, skipping those that already have citing articles.
-        3. Uses ReferenceRetriever to fetch citing articles from Europe PMC and PubMed.
-        4. Updates the DataFrame with citing article information.
-        5. Saves progress after processing each article.
+    def fetch_cited_by(self) -> Self:
+        """Fetch citing articles for each entry in ``df``.
 
         Returns:
-        - self: The updated PubMedSearcher instance with citing articles added.
+            Self: The updated instance.
 
-        Notes:
-        - Citing articles are retrieved from Europe PMC (default) and PubMed if available.
-        - Works best for articles with an existing record in Europe PMC.
         """
         if self.df.empty:
             print("DataFrame is empty. No articles to fetch cited-by data for.")
-            return
+            return self
 
         if 'cited_by' not in self.df.columns:
             self.df['cited_by'] = None
@@ -333,10 +296,7 @@ class PubMedSearcher:
         return self
 
     def fetch_abstracts(self):
-        """
-        Fetches abstracts for each article in the DataFrame using the Entrez API.
-        Unnecessary if you used the 'search' method to retrieve articles, as abstracts are already included.
-        """
+        """Retrieve abstracts for articles missing them in ``df``."""
         if not hasattr(self, 'df') or self.df.empty:
             print("DataFrame does not exist or is empty.")
             return
@@ -354,8 +314,15 @@ class PubMedSearcher:
             
             self.save()
     
-    def get_abstract(self, pmid):
-        """Fetches the abstract for an article identified by its PMID using the Entrez API."""
+    def get_abstract(self, pmid: str) -> str:
+        """Fetch the abstract for a PMID.
+
+        Args:
+            pmid (str): Identifier of the article.
+
+        Returns:
+            str: Abstract text.
+        """
         Entrez.email = self.email
         handle = Entrez.efetch(db="pubmed", id=pmid, retmode="xml")
         article_details = Entrez.read(handle)
@@ -363,18 +330,19 @@ class PubMedSearcher:
         abstract = article_details['PubmedArticle'][0]['MedlineCitation']['Article'].get('Abstract', {}).get('AbstractText', '')
         return " ".join(abstract)
 
-    def download_xml_fulltext(self, download_directory="downloads"):
-        """
-        Downloads the XML full text for each article in the DataFrame to the specified directory.
+    def download_xml_fulltext(self, download_directory: str = "downloads") -> Self:
+        """Download XML full text for open-access articles.
 
-        Parameters:
-        download_directory (str): The directory where the XML files should be saved.
+        Args:
+            download_directory (str): Destination directory for XML files.
 
-        XML full text download is not very common (it has to be in the pubmed OA subset, either USA or European)
+        Returns:
+            Self: The updated instance.
+
         """
         if not hasattr(self, 'df') or self.df.empty:
             print("DataFrame does not exist or is empty.")
-            return
+            return self
         
         if 'xml_download_complete' not in self.df.columns:
             self.df['xml_download_complete'] = 'Not started'
@@ -410,20 +378,67 @@ class PubMedSearcher:
                 self.df.at[index, 'xml_download_complete'] = "Not OA or no XML available"
                 self.df.at[index, 'xml_filepath'] = None
 
-    def save(self, csv_path="master_list.csv"):
-        """
-        Saves the DataFrame to a CSV file.
+        return self
+
+    def save(self, csv_path: str = "master_list.csv") -> Self:
+        """Persist the internal DataFrame to CSV.
+
+        Args:
+            csv_path (str): Output path for the CSV file.
+
+        Returns:
+            Self: This instance.
+
         """
         self.df.to_csv(csv_path, index=False)
+        return self
 
-    def save_abstracts_as_csv(self, filename="abstracts.csv"):
-        """Saves a DataFrame containing only the 'pmid' and 'abstract' columns to a CSV file."""
-        abstracts_df = self.df[['pmid','abstract']].copy()
-        abstracts_df.to_csv(filename, index=False)
-    
-    def download_article_xml_europe(self, pmid, download_directory="downloads", filename_suffix=None):
+    def save_abstracts_as_csv(self, filename: str = "abstracts.csv") -> Self:
+        """Save only PMIDs and abstracts to a CSV file.
+
+        Args:
+            filename (str): Output filename.
+
+        Returns:
+            Self: This instance.
+
         """
-        Downloads the XML data for an article identified by its PMID from Europe PMC and saves it to a specified directory.
+        abstracts_df = self.df[['pmid', 'abstract']].copy()
+        abstracts_df.to_csv(filename, index=False)
+        return self
+
+    def _determine_download_directory(
+        self, row: pd.Series, base_directory: str, index: int
+    ) -> str:
+        """Build a per-article download directory.
+
+        Args:
+            row (pandas.Series): Row representing the article.
+            base_directory (str): Root directory for downloads.
+            index (int): Row index used as a fallback.
+
+        Returns:
+            str: Path to the directory where files should be saved.
+
+        """
+        identifier = row.get('pmid') or row.get('doi') or f"article_{index}"
+        return os.path.join(base_directory, str(identifier))
+    
+    def download_article_xml_europe(
+        self,
+        pmid: str,
+        download_directory: str = "downloads",
+        filename_suffix: str | None = None,
+    ) -> str | None:
+        """Download XML full text from Europe PMC.
+
+        Args:
+            pmid (str): PubMed identifier.
+            download_directory (str): Output directory.
+            filename_suffix (str | None): Optional filename override.
+
+        Returns:
+            str | None: Path to the saved file or ``None`` on failure.
         """
         url = f"https://www.ebi.ac.uk/europepmc/webservices/rest/MED/{pmid}/fullTextXML"
         print(url)
@@ -449,9 +464,21 @@ class PubMedSearcher:
             print(f"Exception occurred while fetching article XML: {e}")
             return None
 
-    def download_article_xml_pubmed_oa_subset(self, pmcid, download_directory="downloads", filename_suffix=None):
-        """
-        Downloads the XML data for an article identified by its PMCID from PubMed OA subset and saves it to a specified directory.
+    def download_article_xml_pubmed_oa_subset(
+        self,
+        pmcid: str,
+        download_directory: str = "downloads",
+        filename_suffix: str | None = None,
+    ) -> str | None:
+        """Download XML from the PubMed Open Access subset.
+
+        Args:
+            pmcid (str): PubMed Central identifier.
+            download_directory (str): Output directory.
+            filename_suffix (str | None): Optional filename override.
+
+        Returns:
+            str | None: Path to the saved file or ``None`` on failure.
         """
         xml_content = self._get_xml_for_pmcid(pmcid)
         if xml_content:
@@ -467,18 +494,16 @@ class PubMedSearcher:
             print(f"Failed to download article XML for PMCID {pmcid}.")
             return None
 
-    def _validate_dataframe(self, df):
-        """Validates an input DataFrame to ensure it contains the required columns.
-        Required columns: 'title', 'doi' # We may need to adjust this in the future
-        """
+    def _validate_dataframe(self, df: pd.DataFrame) -> None:
+        """Ensure an input DataFrame contains required columns."""
         required_columns = ['title', 'doi']  # Adjusted required columns
         df.rename(columns={col: col.lower() for col in df.columns}, inplace=True)
         missing_columns = [col for col in required_columns if col not in df.columns]
         if missing_columns:
             raise ValueError(f"DataFrame is missing required columns: {', '.join(missing_columns)}")
 
-    def _parse_records_to_df(self, records_xml_bytes):
-        """ Parses the API result Entrez into a DataFrame."""
+    def _parse_records_to_df(self, records_xml_bytes: bytes) -> pd.DataFrame:
+        """Convert Entrez XML bytes into a DataFrame."""
         records_io = BytesIO(records_xml_bytes)
         records = Entrez.read(records_io)
         records_data = []
@@ -522,9 +547,14 @@ class PubMedSearcher:
         df = df[cols]
         return df
 
-    def _get_xml_for_pmcid(self, pmcid):
-        """
-        Fetches XML content for a given PMCID from PubMed Central.
+    def _get_xml_for_pmcid(self, pmcid: str) -> bytes | None:
+        """Fetch XML content for a PMCID from PubMed Central.
+
+        Args:
+            pmcid (str): PubMed Central identifier.
+
+        Returns:
+            bytes | None: XML content if available.
         """
         pmcid = pmcid.replace("PMC", "")
         base_url = "https://www.ncbi.nlm.nih.gov/pmc/oai/oai.cgi"
@@ -543,4 +573,3 @@ class PubMedSearcher:
         else:
             print("Error:", response.status_code)
             return None
-    
