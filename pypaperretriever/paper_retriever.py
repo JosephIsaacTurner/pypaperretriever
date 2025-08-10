@@ -1,3 +1,5 @@
+"""Retrieve and download scientific papers from various sources."""
+
 import os
 import requests
 import time
@@ -12,35 +14,30 @@ from urllib.parse import urljoin, urlparse
 
 from .utils import entrez_efetch, pmid_to_doi, doi_to_pmid, encode_doi, decode_doi
 
+
 class PaperRetriever:
-    """
-    A class to find and download scientific papers.
+    """Find and download scientific papers.
+
+    The class queries several services (Unpaywall, PubMed Central, Crossref and
+    optionally Sci-Hub) to locate a PDF for a given DOI or PMID.
+
+    Args:
+        email (str): Email address used for API requests.
+        doi (str, optional): Digital Object Identifier of the paper.
+        pmid (str, optional): PubMed identifier of the paper.
+        allow_scihub (bool, optional): Whether to query Sci-Hub as a fallback.
+        download_directory (str, optional): Directory where PDFs are stored.
+        filename (str, optional): Custom filename for the downloaded PDF.
+        override_previous_attempt (bool, optional): Overwrite existing downloads.
+
     Attributes:
-        email (str): The email address used for API requests.
-        doi (str): The DOI of the paper.
-        pmid (str): The PubMed ID of the paper.
-        allow_scihub (bool): Whether to allow searching Sci-Hub for the paper.
-        download_directory (str): Directory to save downloaded PDFs.
-        filename (str): Filename for the downloaded PDF.
-        is_oa (bool): Indicates if the paper is open access.
-        on_scihub (bool): Indicates if the paper is available on Sci-Hub.
-        pdf_urls (list): List of URLs to the PDF versions of the paper.
-        is_downloaded (bool): Indicates if the paper has been downloaded.
-        filepath (str): Path to the downloaded PDF file.
-        override_previous_attempt (bool): Whether to override a previous download attempt.
-        user_agents (list): List of user agents for making requests.
-    Methods:
-        download(): Finds and downloads the paper using the DOI or PMID.
-        check_open_access(): Checks if the paper is open access using Unpaywall.
-        check_pubmed_central_access(): Checks if the paper is available in PubMed Central.
-        check_crossref_access(doi): Checks if the paper is available on Crossref.
-        check_scihub_access(): Checks if the paper is available on Sci-Hub.
-        _download_pdf(): Downloads the PDF from the first available URL.
-        _create_json_sidecar(download_success, pdf_filepath, json_filepath, url=None): Creates a JSON sidecar file with download information.
-        _determine_paths(): Determines the file paths for the download.
-        _check_if_downloaded(download_directory_or_path, filetype=".pdf"): Checks if a non-corrupted file exists in the specified directory.
-        _look_for_previous_download(): Looks for a previous download of the PDF file.
-        _get_pdf_element(html_text, mirror): Extracts the PDF link from the HTML text of a Sci-Hub page.
+        doi (str): DOI encoded for safe file paths.
+        pmid (str | None): PubMed ID of the paper.
+        pdf_urls (list[str]): Candidate URLs pointing to PDF files.
+        filepath (str | None): Path to the downloaded PDF if successful.
+        is_downloaded (bool): ``True`` if the PDF has been retrieved.
+        is_oa (bool): ``True`` if the paper is open access.
+        on_scihub (bool): ``True`` if the PDF was found on Sci-Hub.
     """
 
     def __init__(self, email, doi=None, pmid=None, allow_scihub=False, download_directory='PDFs', filename=None, override_previous_attempt=False):
@@ -68,8 +65,14 @@ class PaperRetriever:
         ]
  
     def download(self):
-        """
-        Finds and downloads a paper using the DOI or PMID provided.
+        """Find and download the paper.
+
+        The method queries multiple services for PDF links and attempts to
+        download the first accessible file. Metadata about the attempt is stored
+        alongside the PDF.
+
+        Returns:
+            PaperRetriever: The current instance.
         """
         if not self.override_previous_attempt and self._look_for_previous_download():
             return self
@@ -98,8 +101,13 @@ class PaperRetriever:
         return self
     
     def check_open_access(self):
-        """
-        Checks if an article is open access using Unpaywall and updates the instance with access information.
+        """Check Unpaywall for open-access availability.
+
+        Updates ``pdf_urls`` with any links returned by the API and sets
+        ``is_oa`` if open-access links are found.
+
+        Returns:
+            PaperRetriever: The current instance.
         """
 
         url = f"https://api.unpaywall.org/v2/{decode_doi(self.doi)}?email={self.email}"
@@ -129,8 +137,9 @@ class PaperRetriever:
             return self
         
     def check_pubmed_central_access(self):
-        """
-        Checks if an article is available in PubMed Central, and finds associated PDF links.
+        """Check whether the article is available in PubMed Central.
+
+        Any discovered PDF links are appended to ``pdf_urls``.
         """
         pmc_id = None
         id = self.pmid if self.pmid else doi_to_pmid(decode_doi(self.doi), self.email)
@@ -162,8 +171,10 @@ class PaperRetriever:
                 print(f"Failed to fetch the PubMed Central link. Status code: {response.status_code}")
 
     def check_crossref_access(self, doi):
-        """
-        Checks if an article is available on Crossref, and finds associated PDF links.
+        """Query Crossref for PDF links.
+
+        Args:
+            doi (str): DOI to query.
         """
         base_url = "https://api.crossref.org/works/"
         full_url = f"{base_url}{doi}"
@@ -250,12 +261,13 @@ class PaperRetriever:
             print(e)
 
     def check_scihub_access(self):
-        """
-        Checks access to Sci-Hub mirrors for a given DOI and retrieves the PDF URL if available.
-        This method iterates over a list of Sci-Hub mirrors, constructs URLs using the DOI,
-        and sends HTTP GET requests to check for access. It handles rate limiting by adding
-        random delays between requests and uses random user agents to avoid detection.
-        If a PDF is found, it updates the instance attributes `on_scihub` and `pdf_urls`.
+        """Search Sci-Hub mirrors for the paper.
+
+        Introduces small delays and rotates user agents to reduce the likelihood
+        of being blocked.
+
+        Returns:
+            PaperRetriever: The current instance.
         """
         mirror_list = ["https://sci-hub.st", "https://sci-hub.ru", "https://sci-hub.se"]
         urls = [f"{mirror}/{decode_doi(self.doi)}" for mirror in mirror_list]
@@ -290,9 +302,10 @@ class PaperRetriever:
         return self
 
     def _download_pdf(self):
-        """
-        Downloads a PDF from the first successful URL found in the list of PDF URLs.
-        Stores the PDF in a specified directory, verifies the download, and creates a JSON sidecar.
+        """Download the first accessible PDF in ``pdf_urls``.
+
+        Returns:
+            bool: ``True`` if a PDF was downloaded successfully.
         """
         file_directory, pdf_path, json_path = self._determine_paths()
         os.makedirs(file_directory, exist_ok=True)
@@ -331,22 +344,13 @@ class PaperRetriever:
         return False
 
     def _create_json_sidecar(self, download_success, pdf_filepath, json_filepath, url=None):
-        """
-        Creates a JSON sidecar file with information about the downloaded paper.
+        """Write a JSON sidecar describing the download attempt.
+
         Args:
-            download_success (bool): Indicates whether the PDF was successfully downloaded.
-            pdf_filepath (str): The file path to the downloaded PDF.
-            json_filepath (str): The file path where the JSON sidecar will be saved.
-            url (str, optional): The URL from which the PDF was downloaded. Defaults to None.
-        The JSON sidecar file contains the following fields:
-            - doi (str): The DOI of the paper.
-            - pmid (str): The PubMed ID of the paper.
-            - id (str): The ID of the paper (either the DOI or the PMID).
-            - source_url (str): The URL from which the PDF was downloaded.
-            - all_urls (list): A list of all URLs attempted for downloading the PDF.
-            - download_success (bool): Indicates whether the PDF was successfully downloaded.
-            - pdf_filepath (str): The file path to the downloaded PDF, or "unavailable" if the download failed.
-            - open_access (bool): Indicates whether the paper is open access.
+            download_success (bool): ``True`` if the PDF was downloaded.
+            pdf_filepath (str): Location of the downloaded PDF.
+            json_filepath (str): Where to write the sidecar JSON.
+            url (str, optional): Source URL of the PDF.
         """
 
         open_access = self.is_oa
@@ -367,8 +371,10 @@ class PaperRetriever:
             json.dump(info, f, indent=4)
 
     def _determine_paths(self):
-        """
-        Determines the file directory, PDF path, and JSON path for the download.
+        """Determine output paths for the PDF and its sidecar.
+
+        Returns:
+            tuple[str, str, str]: Directory, PDF path and JSON path.
         """
         if self.filename:
             file_directory = self.download_directory
@@ -384,7 +390,15 @@ class PaperRetriever:
         return file_directory, pdf_path, json_path
 
     def _check_if_downloaded(self, download_directory_or_path, filetype=".pdf"):
-        """Check if a non-corrupted file with the given extension exists in the specified directory or path and delete corrupted files."""
+        """Verify that a downloaded file is not corrupted.
+
+        Args:
+            download_directory_or_path (str): Directory or file path to inspect.
+            filetype (str, optional): Expected file extension. Defaults to ``".pdf"``.
+
+        Returns:
+            PaperRetriever: The current instance.
+        """
         files_with_type = glob(os.path.join(download_directory_or_path, f'*{filetype}'))
 
         non_corrupted_files = 0
@@ -402,9 +416,10 @@ class PaperRetriever:
         return self
     
     def _look_for_previous_download(self):
-        """
-        Looks for a previous download of the PDF file in the download directory.
-        Uses the paths determined by _determine_paths() to ensure consistency with current settings.
+        """Check whether a previous download attempt exists.
+
+        Returns:
+            bool: ``True`` if a sidecar file indicates a completed download.
         """
         file_directory, pdf_path, json_path = self._determine_paths()
 
@@ -416,8 +431,14 @@ class PaperRetriever:
         return False
 
     def _get_pdf_element(self, html_text, mirror):
-        """
-        Extracts the PDF link from the HTML text of a Sci-Hub page.
+        """Extract the PDF link from a Sci-Hub HTML response.
+
+        Args:
+            html_text (str): HTML retrieved from a Sci-Hub mirror.
+            mirror (str): Mirror URL used for the request.
+
+        Returns:
+            str: Resolved PDF link or ``"unavailable"`` if not found.
         """
         soup = BeautifulSoup(html_text, 'lxml')
         pdf_link = ""
@@ -435,8 +456,10 @@ class PaperRetriever:
         return pdf_link
 
 def main():
-    """
-    Command-line interface for fetching scientific papers.
+    """Run the command-line interface.
+
+    The interface accepts DOI or PMID identifiers and downloads the
+    corresponding PDFs using :class:`PaperRetriever`.
     """
     parser = argparse.ArgumentParser(description='Download scientific papers automatically.')
     parser.add_argument('--email', required=True, help='Email address for API usage.')
@@ -458,7 +481,7 @@ def main():
         download_directory=args.dwn_dir,
         filename=args.filename,
         override_previous_attempt=args.override,
-        allow_scihub=args.allow_scihub
+        allow_scihub=args.allow_scihub,
     )
 
     retriever.download()
