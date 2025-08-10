@@ -1,5 +1,0 @@
--r requirements.txt
-mkdocs
-mkdocs-material
-mkdocstrings[python]
-black>=24.0
