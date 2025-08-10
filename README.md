@@ -30,6 +30,9 @@ pip install git+https://github.com/josephisaacturner/pypaperretriever.git
 - Advanced search capabilities with customizable filters
 - Citation network analysis tools
 
+### Ethical and legal note on Sci-Hub
+Use of Sci-Hub is disabled by default and clearly labeled. Institutions and researchers differ in policy and legal context; PyPaperRetriever exposes an opt-in flag so users can comply with local rules while retaining a complete pipeline for contexts where such access is permitted. The authors of PyPaperRetriever do not endorse or encourage the use of Sci-Hub in violation of local laws or institutional policies. Users are responsible for ensuring compliance with all applicable laws and ethical guidelines when using this tool.
+
 ### Usage Examples
 
 For complete examples, see [examples.ipynb](examples.ipynb) in the repository.
