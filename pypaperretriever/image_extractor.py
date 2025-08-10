@@ -1,31 +1,44 @@
+"""Utilities for extracting figures from PDF documents."""
+
+from __future__ import annotations
+
+import io
+import json
 import os
+
+import cv2
 import fitz as pymupdf
 import numpy as np
-import cv2
-from pdf2image import convert_from_path
-import json
 from PIL import Image, ImageOps
-import io
+from pdf2image import convert_from_path
+from typing import Self
 
 
 class ImageExtractor:
-    """Class to extract figures from PDFs. 
-    Able to handle both native and image-based PDFs.
+    """Extract figures from a PDF file.
+
+    The extractor handles both native PDFs (containing embedded images) and
+    scanned PDFs where each page is an image.
+
+    Args:
+        pdf_file_path (str): Path to the PDF file to process.
 
     Attributes:
         filepath (str): Path to the PDF file.
-        dir (str): Directory of the PDF file.
-        is_native_pdf (bool): Whether the PDF is native or image-based.
-        img_paths (list): List of paths to extracted images.
-        img_counter (int): Shared counter for image numbering.
-    
-    Methods:
-        extract_images(): Wrapper function to extract images based on PDF type.
-        extract_from_native_pdf(): Extract figures from a native PDF using PyMuPDF.
-        handle_image_based_pdf(): Convert image-based PDF pages to images and extract figures.
+        dir (str): Directory containing the PDF file.
+        is_valid_pdf (bool): Whether the file can be opened by PyMuPDF.
+        is_native_pdf (bool): ``True`` if the PDF contains embedded text.
+        img_paths (list[str]): Paths to extracted image files.
+        img_counter (int): Counter used to name extracted images.
+        id (str | None): Optional identifier prefix for saved images.
     """
+
     def __init__(self, pdf_file_path):
-        """Init method for ImageExtractor."""
+        """Initialize the extractor.
+
+        Args:
+            pdf_file_path (str): Path to the PDF file to process.
+        """
         self.filepath = pdf_file_path
         self.dir = os.path.dirname(pdf_file_path)
         self.is_valid_pdf = False
@@ -38,8 +51,16 @@ class ImageExtractor:
             self._check_pdf_type()
             self._get_metadata()
 
-    def extract_images(self):
-        """Wrapper function to extract images based on PDF type."""
+    def extract_images(self) -> Self:
+        """Extract images from the PDF.
+
+        The method determines the PDF type and delegates to the appropriate
+        extraction routine. Extracted image paths are stored in ``img_paths``.
+
+        Returns:
+            Self: This instance with ``img_paths`` populated.
+
+        """
         if not self.is_valid_pdf:
             print("PDF is not valid.")
             return self
@@ -48,9 +69,13 @@ class ImageExtractor:
             self.handle_image_based_pdf()
         else:
             self.handle_image_based_pdf()
+        return self
 
-    def extract_from_native_pdf(self):
-        """Extract figures from a native PDF using PyMuPDF."""
+    def extract_from_native_pdf(self) -> None:
+        """Extract figures from a native PDF using PyMuPDF.
+
+        Saves each valid image to disk and records its file path.
+        """
         try:
             with pymupdf.open(self.filepath) as doc:
                 for page_num in range(len(doc)):
@@ -108,8 +133,12 @@ class ImageExtractor:
         except Exception as e:
             print(f"Error extracting from native PDF: {e}")
 
-    def handle_image_based_pdf(self):
-        """Convert image-based PDF pages to images and extract figures."""
+    def handle_image_based_pdf(self) -> None:
+        """Process a scanned PDF.
+
+        Each page is converted to an image and potential figures are extracted
+        using :meth:`_crop_boxes_in_image`.
+        """
         try:
             pages = convert_from_path(self.filepath, 300)  # DPI set to 300 for good quality
 
@@ -123,8 +152,15 @@ class ImageExtractor:
         except Exception as e:
             print(f"Error handling image-based PDF: {e}")
 
-    def _crop_boxes_in_image(self, img_path):
-        """Crop boxes (figures) from the given image and save them, filtering out small areas."""
+    def _crop_boxes_in_image(self, img_path: str) -> int:
+        """Crop figure-like regions from an image.
+
+        Args:
+            img_path (str): Path to the page image to analyse.
+
+        Returns:
+            int: Updated image counter after cropping operations.
+        """
         img = cv2.imread(img_path)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         _, thresh = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
@@ -149,8 +185,8 @@ class ImageExtractor:
 
         return self.img_counter
 
-    def _get_metadata(self):
-        """See if there's a matching JSON file for the PDF and extract metadata."""
+    def _get_metadata(self) -> None:
+        """Load companion metadata if a JSON sidecar exists."""
         metadata_json = self.filepath.replace(".pdf", ".json")
         if os.path.exists(metadata_json):
             try:
@@ -161,8 +197,12 @@ class ImageExtractor:
             except Exception as e:
                 print(f"Error reading metadata JSON: {e}")
 
-    def _check_pdf_type(self):
-        """Determine if the PDF is native or image-based by checking for substantial text."""
+    def _check_pdf_type(self) -> None:
+        """Determine whether the PDF is native or image based.
+
+        Checks the first few pages for the presence of text; absence suggests a
+        scanned PDF.
+        """
         try:
             with pymupdf.open(self.filepath) as doc:
                 for page_num in range(min(5, len(doc))):  # Check the first 5 pages
@@ -177,8 +217,15 @@ class ImageExtractor:
             print(f"Error checking PDF type: {e}")
             self.is_native_pdf = False
 
-    def _check_valid_img(self, img):
-        """Check if the image has realistic dimensions and characteristics of a figure."""
+    def _check_valid_img(self, img: np.ndarray | Image.Image) -> bool:
+        """Validate whether an image likely represents a figure.
+
+        Args:
+            img (numpy.ndarray | PIL.Image.Image): Image to validate.
+
+        Returns:
+            bool: ``True`` if the image appears to be a valid figure.
+        """
         if isinstance(img, np.ndarray):
             h, w = img.shape[:2]
         else:
@@ -210,8 +257,12 @@ class ImageExtractor:
             return True  # Image passes all checks
         return False  # Image is likely not neuroimaging data or is too simple
 
-    def _make_json_sidecar(self, img_counter):
-        """Creates an empty JSON file with a predefined structure."""
+    def _make_json_sidecar(self, img_counter: int) -> None:
+        """Create a JSON sidecar for an extracted image.
+
+        Args:
+            img_counter (int): Sequential number of the image being saved.
+        """
         id_prefix = f"id-{self.id}_" if self.id else ""
         json_filepath = os.path.join(self.dir, "images", f"{id_prefix}img-{img_counter}.json")
         os.makedirs(os.path.dirname(json_filepath), exist_ok=True)
@@ -228,8 +279,8 @@ class ImageExtractor:
         except Exception as e:
             print(f"Error writing JSON sidecar for image {img_counter}: {e}")
 
-    def _determine_if_valid_pdf(self):
-        """Check if the PDF is a valid file."""
+    def _determine_if_valid_pdf(self) -> None:
+        """Check whether the PDF can be opened by PyMuPDF."""
         try:
             with pymupdf.open(self.filepath) as doc:
                 self.is_valid_pdf = True
