@@ -82,5 +82,4 @@ results = tracker.track_paper()
 ```
 
 ## What's next?
-Explore the full API reference for more details on available methods and options:
-- [API Reference](api/index.md)
+Explore the [full API reference](api/index.md) for more details on available methods and options.

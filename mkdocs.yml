@@ -36,7 +36,7 @@ plugins:
         python:
           options:
             docstring_style: google
-            show_source: false
+            show_source: true
             show_root_heading: true
             show_object_full_path: false
             separate_signature: true
