@@ -8,7 +8,7 @@ with open('README.md', 'r', encoding='utf-8') as f:
 
 setup(
     name='pypaperretriever',
-    version='0.1.0',
+    version='1.0.0',
     author='Joseph Turner',
     author_email='josephisaacturner@gmail.com',
     packages=find_packages(),
