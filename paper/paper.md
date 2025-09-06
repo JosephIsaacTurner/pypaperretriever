@@ -9,7 +9,7 @@ tags:
 authors:
   - name: Joseph I Turner
     orcid: 0009-0009-2423-3451
-    affiliation: [1, 2]
+    affiliation: "1, 2"
   - name: Kaydance D Turner
     affiliation: 3
 affiliations:
