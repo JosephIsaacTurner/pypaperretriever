@@ -141,4 +141,4 @@ MIT License
 
 If you use PyPaperRetriever in your research, please cite:
 
-[Add citation information here later]
+Turner et al., (2025). PyPaperRetriever: A Python Tool for Finding and Downloading Scientific Literature. Journal of Open Source Software, 10(113), 8135, https://doi.org/10.21105/joss.08135
