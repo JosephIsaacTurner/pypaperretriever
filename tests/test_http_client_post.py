@@ -9,14 +9,9 @@ request (429, 503), never on 504, where the request may have run.
 
 from unittest.mock import Mock, patch
 
-import pytest
-
 from pypaperretriever.http_client import HttpClient, RobotsTxtCache
 
 URL = "https://example.com/search/query"
-
-NOT_YET = pytest.mark.xfail(reason="HttpClient.post() not implemented",
-                            strict=True)
 
 
 def _polite(can_fetch=True, crawl_delay=None, **kwargs):
@@ -29,7 +24,6 @@ def _polite(can_fetch=True, crawl_delay=None, **kwargs):
     return client
 
 
-@NOT_YET
 class TestPostPassthrough:
 
     @patch("pypaperretriever.http_client.requests.post")
@@ -52,7 +46,6 @@ class TestPostPassthrough:
         assert mock_post.call_args[1]["headers"]["User-Agent"] == "Mine/2.0"
 
 
-@NOT_YET
 class TestPostPolite:
 
     @patch("pypaperretriever.http_client.requests.post")
@@ -95,7 +88,6 @@ class TestPostPolite:
         assert abs(mock_sleep.call_args[0][0] - 1.5) < 0.01
 
 
-@NOT_YET
 class TestPostRetry:
 
     @patch("pypaperretriever.http_client.time.sleep")
@@ -133,7 +125,6 @@ class TestPostRetry:
         assert client.post(URL, json={}).status_code == 504
         mock_post.assert_called_once()
         mock_sleep.assert_not_called()
-
 
 
 class TestGetUnchanged:

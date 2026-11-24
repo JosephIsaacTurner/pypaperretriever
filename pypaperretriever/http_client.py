@@ -475,24 +475,32 @@ class HttpClient:
         netloc = urlparse(url).netloc.lower()
         return netloc in self.SUPPRESSION_EXEMPT_DOMAINS
 
-    def get(self, url: str, **kwargs: Any) -> Optional[requests.Response]:
-        """Make a GET request with optional robots.txt, backoff, retry, and 403.
+    def _request(
+        self, method: str, url: str, retry_on_504: bool, **kwargs: Any
+    ) -> Optional[requests.Response]:
+        """Send one request with optional robots.txt, backoff, retry, and 403.
+
+        Shared by :meth:`get` and :meth:`post`; both use the same
+        per-domain clock, backoff, and suppression list.
 
         Args:
-            url: The URL to fetch.
-            **kwargs: Additional keyword arguments passed to
-                :func:`requests.get`.
+            method: ``"GET"`` or ``"POST"``.
+            url: The URL to request.
+            retry_on_504: Whether a 504 is retried.  False for requests
+                that are not idempotent: after a gateway timeout the
+                origin may already have acted on the request.
+            **kwargs: Passed to :func:`requests.request`.
 
         Returns:
-            A :class:`requests.Response`, or ``None`` if the URL is disallowed
-            by robots.txt.
+            A :class:`requests.Response`, or ``None`` if the URL is
+            disallowed by robots.txt.
         """
         if not self.polite_mode:
             headers = kwargs.get("headers", {})
             if "User-Agent" not in headers:
                 headers["User-Agent"] = self.user_agent
                 kwargs["headers"] = headers
-            return requests.get(url, **kwargs)
+            return self._send(method, url, **kwargs)
 
         # 1. Suppression check (before any network I/O)
         if self.suppress_on_403:
@@ -517,7 +525,7 @@ class HttpClient:
         domain = self._domain_key(url)
         self._last_fetch_times[domain] = time.time()
 
-        response = requests.get(url, **kwargs)
+        response = self._send(method, url, **kwargs)
 
         # 3. Retry loop for 429, 503, 504
         for _attempt in range(self.max_retries):
@@ -527,7 +535,9 @@ class HttpClient:
                     backoff_wait = self._increase_backoff(domain)
                     wait = max(wait, backoff_wait)
                 time.sleep(wait)
-            elif response.status_code in (503, 504):
+            elif response.status_code == 503 or (
+                response.status_code == 504 and retry_on_504
+            ):
                 wait = self._increase_backoff(domain)
                 if self.verbosity >= 1:
                     print(
@@ -539,7 +549,7 @@ class HttpClient:
                 break
 
             self._last_fetch_times[domain] = time.time()
-            response = requests.get(url, **kwargs)
+            response = self._send(method, url, **kwargs)
 
         # 4. Decrease backoff on success
         if 200 <= response.status_code < 300:
@@ -554,3 +564,43 @@ class HttpClient:
             self._register_suppression(url)
 
         return response
+
+    @staticmethod
+    def _send(method: str, url: str, **kwargs: Any) -> requests.Response:
+        """Dispatch to :func:`requests.get` or :func:`requests.post`."""
+        if method == "POST":
+            return requests.post(url, **kwargs)
+        return requests.get(url, **kwargs)
+
+    def get(self, url: str, **kwargs: Any) -> Optional[requests.Response]:
+        """Make a GET request with optional robots.txt, backoff, retry, and 403.
+
+        Args:
+            url: The URL to fetch.
+            **kwargs: Additional keyword arguments passed to
+                :func:`requests.get`.
+
+        Returns:
+            A :class:`requests.Response`, or ``None`` if the URL is disallowed
+            by robots.txt.
+        """
+        return self._request("GET", url, retry_on_504=True, **kwargs)
+
+    def post(self, url: str, **kwargs: Any) -> Optional[requests.Response]:
+        """Make a POST request under the same politeness rules as :meth:`get`.
+
+        Robots.txt, 403 suppression, the per-domain delay (one clock per
+        domain shared with :meth:`get`) and backoff all apply.  Because
+        POST is not idempotent it is retried only on 429 and 503, which
+        mean the server did not act on the request, and never on 504.
+
+        Args:
+            url: The URL to post to.
+            **kwargs: Additional keyword arguments passed to
+                :func:`requests.post` (``json=``, ``data=``, ``timeout=``...).
+
+        Returns:
+            A :class:`requests.Response`, or ``None`` if the URL is disallowed
+            by robots.txt.
+        """
+        return self._request("POST", url, retry_on_504=False, **kwargs)
