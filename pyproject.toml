@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pypaperretriever"
-version = "1.0.1"
+version = "1.0.1.post7"
 description = "A tool to retrieve and process academic papers"
 readme = "README.md"
 requires-python = ">=3.8"
